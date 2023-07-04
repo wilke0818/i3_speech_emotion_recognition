@@ -35,6 +35,7 @@ from transformers import EvalPrediction
 from transformers import TrainingArguments
 from transformers import PreTrainedModel
 from transformers import ProcessorMixin
+from transformers import TrainerCallback
 from typing import Any, Dict, Union
 
 
@@ -51,6 +52,9 @@ from optuna.trial import TrialState
 import pytorch_lightning as pl
 from optuna.integration import PyTorchLightningPruningCallback
 from sklearn.metrics import classification_report
+
+import shutil
+import os
 
 @dataclass
 class SpeechClassifierOutput(ModelOutput):
@@ -215,3 +219,13 @@ class CTCTrainer(Trainer):
             loss.backward()
 
         return loss.detach()
+
+
+
+class RemoveHyperparamSearchModels(TrainerCallback):
+    def on_train_end(self, args, state, control, **kwargs):
+        if state.is_hyper_param_search:
+            files = [os.path.join(args.output_dir, f) for f in os.listdir(main_dir) if os.path.isdir(os.path.join(args.output_dir, f)) and f is not 'runs']
+            for file in files:
+                shutil.rmtree(file)
+        print("Ending training")

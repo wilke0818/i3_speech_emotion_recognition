@@ -32,7 +32,12 @@ import transformers
 from transformers import Wav2Vec2Processor
 from transformers import EvalPrediction
 from transformers import TrainingArguments
+from transformers.integrations import WandbCallback
+from transformers import EarlyStoppingCallback
+
 from typing import Any, Dict, Union
+
+
 
 import torch
 from packaging import version
@@ -76,7 +81,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
             model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data)
-    train_dataset, eval_dataset, test_dataset = generate_dataset(0, .8, True, True)
+    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True)
     
     input_column = model_params.input_column
     output_column = model_params.output_column
@@ -174,11 +179,13 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         per_device_eval_batch_size=per_device_eval_batch_size,
         gradient_accumulation_steps=2,
         # fp16=True,
-        save_strategy='no',
+        save_strategy='steps',
         save_steps=save_steps,
         eval_steps=eval_steps,
         logging_steps=logging_steps,
-        save_total_limit=2,
+        save_total_limit=1,
+        load_best_model_at_end=True,
+        num_train_epochs=10,
         metric_for_best_model="eval_loss",
     )
     
@@ -198,7 +205,6 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     def my_hp_space(trial):
         return {
           "learning_rate": trial.suggest_float("learning_rate", 5e-5, 1e-3, log=True),
-          "num_train_epochs": trial.suggest_int("num_train_epochs", 2, 10),
         }
     
     def my_objective(metrics):
@@ -213,6 +219,11 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         eval_dataset=hp_search_eval_dataset,
         tokenizer=processor.feature_extractor,
     )
+
+    #trainer.remove_callback(WandbCallback())
+    trainer.add_callback(EarlyStoppingCallback(15))
+    trainer.add_callback(RemoveHyperparamSearchModels())
+
     best_run = trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, compute_objective=my_objective, n_trials=hp_num_trials)
     print(best_run)
     
@@ -223,13 +234,13 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         per_device_train_batch_size=per_device_train_batch_size,
         per_device_eval_batch_size=per_device_eval_batch_size,
         gradient_accumulation_steps=2,
-        num_train_epochs= best_run.hyperparameters['num_train_epochs'],
+        num_train_epochs=10,
         # fp16=True,
         save_steps=save_steps,
         eval_steps=eval_steps,
         logging_steps=logging_steps,
         learning_rate= best_run.hyperparameters['learning_rate'],
-        save_total_limit=2,
+        save_total_limit=1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
     )
@@ -257,7 +268,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     # In[ ]:
     
-    
+    trainer.add_callback(EarlyStoppingCallback(15))
     history = trainer.train()
     
     

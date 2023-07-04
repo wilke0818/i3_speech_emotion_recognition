@@ -149,6 +149,8 @@ def run_eval(model_path, save_path, output_path):
     accuracy = 0
     with open(os.path.join(output_path, 'classification_report.json'), 'w') as f:
         eval_dict = classification_report(y_true, y_pred, target_names=label_names, output_dict=True)
+        eval_dict['y_pred'] = y_pred
+        eval_dict['y_true'] = y_true
         eval_json = json.dumps(eval_dict)
         accuracy = eval_dict['accuracy']
         f.write(eval_json)
@@ -181,6 +183,6 @@ def run_eval(model_path, save_path, output_path):
 
 # In[ ]:
 
-#run_eval('./model/final/06232023/wav2vec2-xlsr/', './data/emovo/', './model/final/06232023/wav2vec2-xlsr/emovo/')
+#run_eval('./model/final/06232023/wav2vec2-xlsr/788/', './data/train_test_validation/0/speaker_ind_True_100_80/', './outputs/wav2vec2-xlsr/emozionalmente/788/')
 
 
