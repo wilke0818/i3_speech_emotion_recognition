@@ -36,6 +36,7 @@ from transformers import TrainingArguments
 from transformers import PreTrainedModel
 from transformers import ProcessorMixin
 from transformers import TrainerCallback
+from transformers import TrainingArguments
 from typing import Any, Dict, Union
 
 
@@ -222,10 +223,18 @@ class CTCTrainer(Trainer):
 
 
 
-class RemoveHyperparamSearchModels(TrainerCallback):
-    def on_train_end(self, args, state, control, **kwargs):
+class MemorySaverCallback(TrainerCallback):
+    
+    def __init__(self):
+        super(MemorySaverCallback, self).__init__()
+        self.run_num = 0
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        print(f'attempting to remove models: on run {self.run_num}')
         if state.is_hyper_param_search:
-            files = [os.path.join(args.output_dir, f) for f in os.listdir(main_dir) if os.path.isdir(os.path.join(args.output_dir, f)) and f is not 'runs']
+            files = [os.path.join(args.output_dir, f) for f in os.listdir(args.output_dir) if os.path.isdir(os.path.join(args.output_dir, f)) and f != 'runs']
             for file in files:
                 shutil.rmtree(file)
-        print("Ending training")
+
+    def on_train_end(self, args, state, control, **kwargs):
+        self.run_num+=1

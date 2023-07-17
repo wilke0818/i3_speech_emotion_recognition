@@ -13,7 +13,7 @@ import sys
 from collections import OrderedDict
 import IPython.display as ipd
 from sklearn.model_selection import GroupShuffleSplit
-from datasets import load_dataset, load_metric
+from datasets import load_dataset, load_metric, concatenate_datasets
 from transformers import AutoConfig, AutoProcessor, AutoModel, Wav2Vec2Processor
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -69,7 +69,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     per_device_eval_batch_size= model_params.per_device_batch_size
     batch_size = model_params.batch_size
     num_proc = 1
-    save_steps = eval_steps * 10
+    save_steps = eval_steps * 2
     model_output_dir=output_path
     model_name_or_path = model_params.model_path_or_name
     #model_name_or_path = "jonatasgrosman/wav2vec2-large-xlsr-53-italian"
@@ -81,6 +81,15 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
             model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data)
+    
+    #Since test set is not used for hp search, combine eval and train back together and use the original test set for eval: gives the desired train/test split with the amount of data specified
+
+    hp_search_train_dataset = concatenate_datasets([hp_search_train_dataset, hp_search_eval_dataset])
+    hp_search_eval_dataset = hp_search_test_dataset
+
+    print(hp_search_train_dataset)
+    print(hp_search_eval_dataset)
+
     train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True)
     
     input_column = model_params.input_column
@@ -108,9 +117,9 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
         speech = resampler(speech_array).squeeze().numpy()
-        #CUT = 4 # custom cut at 4 seconds for speeding up the data processing (not necessary)
-        #if len(speech) > 16000*CUT:
-        #    return speech[:int(16000*CUT)]
+        CUT = 4 # custom cut at 4 seconds for speeding up the data processing (not necessary)
+        if len(speech) > 16000*CUT:
+            return speech[:int(16000*CUT)]
         return speech
     
     def label_to_id(label, label_list):
@@ -177,7 +186,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         evaluation_strategy="steps",
         per_device_train_batch_size=per_device_train_batch_size,
         per_device_eval_batch_size=per_device_eval_batch_size,
-        gradient_accumulation_steps=2,
+        gradient_accumulation_steps=4,
         # fp16=True,
         save_strategy='steps',
         save_steps=save_steps,
@@ -185,9 +194,12 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         logging_steps=logging_steps,
         save_total_limit=1,
         load_best_model_at_end=True,
-        num_train_epochs=10,
+        num_train_epochs=15,
         metric_for_best_model="eval_loss",
     )
+
+    num_evals = round(len(hp_search_train_dataset)/per_device_train_batch_size/4*15/10)
+    quit_after_evals = round(num_evals*.1)
     
     if version.parse(torch.__version__) >= version.parse("1.6"):
         _is_native_amp_available = True
@@ -220,9 +232,10 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         tokenizer=processor.feature_extractor,
     )
 
-    #trainer.remove_callback(WandbCallback())
-    trainer.add_callback(EarlyStoppingCallback(15))
-    trainer.add_callback(RemoveHyperparamSearchModels())
+    print('Quitting after:', quit_after_evals)
+    print(trainer.pop_callback(WandbCallback))
+    trainer.add_callback(EarlyStoppingCallback(quit_after_evals))
+    trainer.add_callback(MemorySaverCallback)
 
     best_run = trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, compute_objective=my_objective, n_trials=hp_num_trials)
     print(best_run)
@@ -233,8 +246,8 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         evaluation_strategy="steps",
         per_device_train_batch_size=per_device_train_batch_size,
         per_device_eval_batch_size=per_device_eval_batch_size,
-        gradient_accumulation_steps=2,
-        num_train_epochs=10,
+        gradient_accumulation_steps=4,
+        num_train_epochs=15,
         # fp16=True,
         save_steps=save_steps,
         eval_steps=eval_steps,
@@ -268,7 +281,15 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     # In[ ]:
     
-    trainer.add_callback(EarlyStoppingCallback(15))
+    num_evals = round(len(train_dataset)/per_device_train_batch_size/4*15/10)
+    quit_after_evals = round(num_evals*.1)
+    print('Quitting after:', quit_after_evals)
+    trainer.add_callback(EarlyStoppingCallback(quit_after_evals))
+ 
+    print(trainer.pop_callback(WandbCallback))
+
+   
+
     history = trainer.train()
     
     
@@ -288,7 +309,7 @@ def main():
         rng = np.random.default_rng()
         seeds = rng.permutation(1000)[0:5]
     else:
-        seeds = np.arrage(1)
+        seeds = np.arange(1)
 
     print(seeds)
 

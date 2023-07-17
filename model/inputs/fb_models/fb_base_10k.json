@@ -1,0 +1,5 @@
+{
+	"model_path_or_name": "facebook/wav2vec2-base-10k-voxpopuli-ft-it",
+	"name": "fb_base_10k",
+	"per_device_batch_size": 8
+}

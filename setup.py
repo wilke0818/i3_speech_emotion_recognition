@@ -19,6 +19,7 @@ def run_setup():
     get_ipython().run_line_magic('pip', 'install nvidia-tensorrt')
     get_ipython().run_line_magic('pip', 'install nvidia-pyindex')
 
+def run_download_data():
     get_ipython().system('mkdir -p data')
     get_ipython().system('get -O audio.zip https://www.dropbox.com/s/tlbxkdabow9w03i/audio.zip')
     get_ipython().system('wget -O metadata.zip https://www.dropbox.com/s/gi1iwc3xwwl0a4z/metadata.zip')
@@ -53,4 +54,4 @@ def generate_data_files():
       samples_df.iloc[index, samples_df.columns.get_loc('new_file_name')] = new_file_name
       os.system('cp data/audio/' + file_name + ' data/audio4analysis/' + new_file_name)
 
-
+run_setup()
