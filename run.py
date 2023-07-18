@@ -58,7 +58,7 @@ from model_input import ModelInputParameters
 from utils import *
 import json
 
-def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_trials):
+def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_trials, resume_from_prev=False):
     speaker_independent_scenario = model_params.speaker_independent_scenario
     eval_steps = model_params.eval_steps
     logging_steps = model_params.logging_steps
@@ -78,17 +78,17 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     pooling_mode = model_params.pooling_mode
     
     
-    
-    hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
+    if not resume_from_prev:
+        hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
             model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data)
     
     #Since test set is not used for hp search, combine eval and train back together and use the original test set for eval: gives the desired train/test split with the amount of data specified
 
-    hp_search_train_dataset = concatenate_datasets([hp_search_train_dataset, hp_search_eval_dataset])
-    hp_search_eval_dataset = hp_search_test_dataset
+        hp_search_train_dataset = concatenate_datasets([hp_search_train_dataset, hp_search_eval_dataset])
+        hp_search_eval_dataset = hp_search_test_dataset
 
-    print(hp_search_train_dataset)
-    print(hp_search_eval_dataset)
+        print(hp_search_train_dataset)
+        print(hp_search_eval_dataset)
 
     train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True)
     
@@ -137,19 +137,19 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
         return result
     
-    
-    hp_search_train_dataset = hp_search_train_dataset.map(
-        preprocess_function,
-        batch_size=batch_size,
-        batched=True,
-        num_proc=num_proc
-    )
-    hp_search_eval_dataset = hp_search_eval_dataset.map(
-        preprocess_function,
-        batch_size=batch_size,
-        batched=True,
-        num_proc=num_proc
-    )
+    if not resume_from_prev:
+        hp_search_train_dataset = hp_search_train_dataset.map(
+            preprocess_function,
+            batch_size=batch_size,
+            batched=True,
+            num_proc=num_proc
+        )
+        hp_search_eval_dataset = hp_search_eval_dataset.map(
+            preprocess_function,
+            batch_size=batch_size,
+            batched=True,
+            num_proc=num_proc
+        )
     train_dataset = train_dataset.map(
         preprocess_function,
         batch_size=batch_size,
@@ -179,27 +179,28 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
             return {"mse": ((preds - p.label_ids) ** 2).mean().item()}
         else:
             return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
-    
-    training_args = TrainingArguments(
-        output_dir=model_output_dir,
-        overwrite_output_dir=True,
-        evaluation_strategy="steps",
-        per_device_train_batch_size=per_device_train_batch_size,
-        per_device_eval_batch_size=per_device_eval_batch_size,
-        gradient_accumulation_steps=4,
-        # fp16=True,
-        save_strategy='steps',
-        save_steps=save_steps,
-        eval_steps=eval_steps,
-        logging_steps=logging_steps,
-        save_total_limit=1,
-        load_best_model_at_end=True,
-        num_train_epochs=15,
-        metric_for_best_model="eval_loss",
-    )
+   
+    if not resume_from_prev:
+        training_args = TrainingArguments(
+            output_dir=model_output_dir,
+            overwrite_output_dir=True,
+            evaluation_strategy="steps",
+            per_device_train_batch_size=per_device_train_batch_size,
+            per_device_eval_batch_size=per_device_eval_batch_size,
+            gradient_accumulation_steps=4,
+            # fp16=True,
+            save_strategy='steps',
+            save_steps=save_steps,
+            eval_steps=eval_steps,
+            logging_steps=logging_steps,
+            save_total_limit=1,
+            load_best_model_at_end=True,
+            num_train_epochs=15,
+            metric_for_best_model="eval_loss",
+        )
 
-    num_evals = round(len(hp_search_train_dataset)/per_device_train_batch_size/4*15/10)
-    quit_after_evals = round(num_evals*.1)
+        num_evals = round(len(hp_search_train_dataset)/per_device_train_batch_size/4*15/10)
+        quit_after_evals = round(num_evals*.1)
     
     if version.parse(torch.__version__) >= version.parse("1.6"):
         _is_native_amp_available = True
@@ -213,50 +214,67 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         model.freeze_feature_extractor()
         return model
     
-    
     def my_hp_space(trial):
         return {
-          "learning_rate": trial.suggest_float("learning_rate", 5e-5, 1e-3, log=True),
+            "learning_rate": trial.suggest_float("learning_rate", 5e-5, 1e-3, log=True),
         }
-    
+        
     def my_objective(metrics):
         return metrics["eval_loss"]
-    
-    trainer = CTCTrainer(
-        model_init=model_init,
-        data_collator=data_collator,
-        args=training_args,
-        compute_metrics=compute_metrics,
-        train_dataset=hp_search_train_dataset,
-        eval_dataset=hp_search_eval_dataset,
-        tokenizer=processor.feature_extractor,
-    )
+        
+    if not resume_from_prev: 
+        trainer = CTCTrainer(
+            model_init=model_init,
+            data_collator=data_collator,
+            args=training_args,
+            compute_metrics=compute_metrics,
+            train_dataset=hp_search_train_dataset,
+            eval_dataset=hp_search_eval_dataset,
+            tokenizer=processor.feature_extractor,
+        )
 
-    print('Quitting after:', quit_after_evals)
-    print(trainer.pop_callback(WandbCallback))
-    trainer.add_callback(EarlyStoppingCallback(quit_after_evals))
-    trainer.add_callback(MemorySaverCallback)
+        print('Quitting after:', quit_after_evals)
+        print(trainer.pop_callback(WandbCallback))
+        trainer.add_callback(EarlyStoppingCallback(quit_after_evals))
+        trainer.add_callback(MemorySaverCallback)
 
-    best_run = trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, compute_objective=my_objective, n_trials=hp_num_trials)
-    print(best_run)
+        best_run = trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, compute_objective=my_objective, n_trials=hp_num_trials)
+        print(best_run)
     
-    
-    training_args = TrainingArguments(
-        output_dir=model_output_dir,
-        evaluation_strategy="steps",
-        per_device_train_batch_size=per_device_train_batch_size,
-        per_device_eval_batch_size=per_device_eval_batch_size,
-        gradient_accumulation_steps=4,
-        num_train_epochs=15,
-        # fp16=True,
-        save_steps=save_steps,
-        eval_steps=eval_steps,
-        logging_steps=logging_steps,
-        learning_rate= best_run.hyperparameters['learning_rate'],
-        save_total_limit=1,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-    )
+    if not resume_from_prev:
+        training_args = TrainingArguments(
+            output_dir=model_output_dir,
+            evaluation_strategy="steps",
+            per_device_train_batch_size=per_device_train_batch_size,
+            per_device_eval_batch_size=per_device_eval_batch_size,
+            gradient_accumulation_steps=4,
+            num_train_epochs=15,
+            # fp16=True,
+            save_steps=save_steps,
+            eval_steps=eval_steps,
+            logging_steps=logging_steps,
+            learning_rate= best_run.hyperparameters['learning_rate'],
+            save_total_limit=1,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+        )
+    else:
+        training_args = TrainingArguments(
+            output_dir=model_output_dir,
+            evaluation_strategy="steps",
+            per_device_train_batch_size=per_device_train_batch_size,
+            per_device_eval_batch_size=per_device_eval_batch_size,
+            gradient_accumulation_steps=4,
+            num_train_epochs=15,
+            # fp16=True,
+            save_steps=save_steps,
+            eval_steps=eval_steps,
+            logging_steps=logging_steps,
+            save_total_limit=1,
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+        )
+        
     
     
     # In[ ]:
@@ -290,7 +308,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
 
    
 
-    history = trainer.train()
+    history = trainer.train(resume_from_checkpoint=resume_from_prev)
     
     
     model.save_pretrained(model_path)
@@ -307,12 +325,14 @@ def main():
 
     if models.get('cross_validation', None) and models['cross_validation']>1:
         rng = np.random.default_rng()
-        seeds = rng.permutation(1000)[0:5]
+        seeds = rng.permutation(1000)[0:models['cross_validation']]
     else:
         seeds = np.arange(1)
 
+    
     print(seeds)
-
+    seeds = [515]
+    resume = True
     for model in os.listdir(models['path_to_model_files']):
         confusion_matrices = {}
         accuracies = {}
@@ -332,7 +352,8 @@ def main():
             output_path = f'./{model_params.name}/{seed}/'
 
             default_eval_csv_path = f'./data/train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}/'
-            run_model(model_params, model_path, output_path, models['hp_amount_of_training_data'], models['hp_num_trials'])
+            run_model(model_params, model_path, output_path, models['hp_amount_of_training_data'], 
+                      models['hp_num_trials'], resume)
             
             for dataset in models['datasets']:
                 if dataset['name'] not in confusion_matrices.keys():
