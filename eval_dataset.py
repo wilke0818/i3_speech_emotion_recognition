@@ -183,6 +183,6 @@ def run_eval(model_path, save_path, output_path):
 
 # In[ ]:
 
-run_eval('./model/final/06232023/wav2vec2-xlsr/146/', './data/train_test_validation/146/speaker_ind_True_100_80/', './outputs/wav2vec2-xlsr/emozionalmente/146/')
+#run_eval('./model/final/06232023/wav2vec2-xlsr/146/', './data/train_test_validation/146/speaker_ind_True_100_80/', './outputs/wav2vec2-xlsr/emozionalmente/146/')
 
 

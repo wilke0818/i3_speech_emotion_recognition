@@ -1,9 +1,9 @@
 {
-	"path_to_model_files": "./model/inputs/06232023",
-	"output_path": "./model/final/06232023",
+	"path_to_model_files": "./model/inputs/07182023",
+	"output_path": "./model/final/07182023",
 	"hp_amount_of_training_data": 0.3,
 	"hp_num_trials": 5,
-	"cross_validation": 2,
+	"cross_validation": 5,
 	"datasets": [
 		{
 			"name": "emovo",

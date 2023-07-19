@@ -265,14 +265,14 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
             per_device_train_batch_size=per_device_train_batch_size,
             per_device_eval_batch_size=per_device_eval_batch_size,
             gradient_accumulation_steps=4,
-            num_train_epochs=15,
+            num_train_epochs=50,
             # fp16=True,
             save_steps=save_steps,
             eval_steps=eval_steps,
             logging_steps=logging_steps,
             save_total_limit=1,
             load_best_model_at_end=True,
-            metric_for_best_model="eval_loss",
+            metric_for_best_model="eval_accuracy" #"eval_loss",
         )
         
     
@@ -299,16 +299,17 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     # In[ ]:
     
-    num_evals = round(len(train_dataset)/per_device_train_batch_size/4*15/10)
-    quit_after_evals = round(num_evals*.1)
+    #num_evals = round(len(train_dataset)/per_device_train_batch_size/4*15/10)
+    quit_after_evals = 10 #round(num_evals*.1)
     print('Quitting after:', quit_after_evals)
-    trainer.add_callback(EarlyStoppingCallback(quit_after_evals))
+    early_stopping_threshold = 0.01
+    trainer.add_callback(EarlyStoppingCallback(quit_after_evals, early_stopping_threshold))
  
     print(trainer.pop_callback(WandbCallback))
 
    
 
-    history = trainer.train(resume_from_checkpoint=resume_from_prev)
+    history = trainer.train()
     
     
     model.save_pretrained(model_path)
@@ -321,7 +322,7 @@ def main():
         models = json.load(f)
 
     if not os.path.exists(models['output_path']):
-        os.mkdir(models['output_path'])
+        os.makedirs(models['output_path'])
 
     if models.get('cross_validation', None) and models['cross_validation']>1:
         rng = np.random.default_rng()
@@ -331,7 +332,6 @@ def main():
 
     
     print(seeds)
-    seeds = [515]
     resume = True
     for model in os.listdir(models['path_to_model_files']):
         confusion_matrices = {}
@@ -339,7 +339,7 @@ def main():
         
         
         model_params = ModelInputParameters.fromJSON(os.path.join(models['path_to_model_files'],model))
-        #seeds = [0,1]
+        seeds = np.arange(models['cross_validation'])
         for seed in seeds:
             model_params.seed = seed
             model_path = os.path.join(models['output_path'],model_params.name)
