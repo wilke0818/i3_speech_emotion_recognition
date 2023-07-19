@@ -14,7 +14,7 @@ from collections import OrderedDict
 import IPython.display as ipd
 from sklearn.model_selection import GroupShuffleSplit
 from datasets import load_dataset, load_metric, concatenate_datasets
-from transformers import AutoConfig, AutoProcessor, AutoModel, Wav2Vec2Processor
+from transformers import AutoConfig, AutoProcessor, AutoModel, Wav2Vec2Processor, AutoFeatureExtractor
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from transformers.file_utils import ModelOutput
@@ -110,8 +110,8 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     setattr(config, 'pooling_mode', pooling_mode)
     
     
-    processor = AutoProcessor.from_pretrained(model_name_or_path,)
-    target_sampling_rate = processor.feature_extractor.sampling_rate
+    processor = AutoFeatureExtractor.from_pretrained(model_name_or_path,) #AutoProcessor.from_pretrained(model_name_or_path,)
+    target_sampling_rate = processor.sampling_rate #processor.feature_extractor.sampling_rate
     
     def speech_file_to_array_fn(path):
         speech_array, sampling_rate = torchaudio.load(path)
@@ -266,7 +266,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
             per_device_eval_batch_size=per_device_eval_batch_size,
             gradient_accumulation_steps=4,
             num_train_epochs=50,
-            # fp16=True,
+            #fp16=True,
             save_steps=save_steps,
             eval_steps=eval_steps,
             logging_steps=logging_steps,
@@ -293,7 +293,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         compute_metrics=compute_metrics,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        tokenizer=processor.feature_extractor,
+        tokenizer=processor #processor.feature_extractor,
     )
     
     
@@ -304,6 +304,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     print('Quitting after:', quit_after_evals)
     early_stopping_threshold = 0.01
     trainer.add_callback(EarlyStoppingCallback(quit_after_evals, early_stopping_threshold))
+    trainer.add_callback(PrinterCallback())
  
     print(trainer.pop_callback(WandbCallback))
 

@@ -36,7 +36,7 @@ from transformers import TrainingArguments
 from transformers import PreTrainedModel
 from transformers import ProcessorMixin
 from transformers import TrainerCallback
-from transformers import TrainingArguments
+from transformers import TrainingArguments, AutoModelForCTC
 from typing import Any, Dict, Union
 
 
@@ -96,6 +96,7 @@ class ModelForSpeechClassification(PreTrainedModel):
         self.init_weights()
 
     def freeze_feature_extractor(self):
+        #self.model.freeze_feature_extractor()
         self.model.feature_extractor._freeze_parameters()
 
     def merged_strategy(
@@ -222,6 +223,20 @@ class CTCTrainer(Trainer):
         return loss.detach()
 
 
+
+class PrinterCallback(TrainerCallback):
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if state.is_local_process_zero:
+            with open(args.logging_dir+"/logs.txt", "a") as f:
+                f.write(str(metrics))
+                print(str(metrics))
+
+class LoggingCallback(TrainerCallback):
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step % 10 == 0:
+            for name, value in state.log_history[-1].items():
+                print(f"{name} at step {state.global_step}: {value}")
+                
 
 class MemorySaverCallback(TrainerCallback):
     
