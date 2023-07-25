@@ -117,9 +117,11 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
         speech = resampler(speech_array).squeeze().numpy()
+        '''
         CUT = 4 # custom cut at 4 seconds for speeding up the data processing (not necessary)
         if len(speech) > 16000*CUT:
             return speech[:int(16000*CUT)]
+        '''
         return speech
     
     def label_to_id(label, label_list):
@@ -265,7 +267,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
             per_device_train_batch_size=per_device_train_batch_size,
             per_device_eval_batch_size=per_device_eval_batch_size,
             gradient_accumulation_steps=4,
-            num_train_epochs=50,
+            num_train_epochs=50, # TODO: CHANGE 50
             #fp16=True,
             save_steps=save_steps,
             eval_steps=eval_steps,

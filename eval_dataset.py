@@ -16,7 +16,7 @@ from collections import OrderedDict
 import IPython.display as ipd
 from sklearn.model_selection import GroupShuffleSplit
 from datasets import load_dataset, load_metric
-from transformers import AutoConfig, AutoModel, AutoProcessor, Wav2Vec2Processor, PreTrainedModel
+from transformers import AutoConfig, AutoModel, AutoProcessor, Wav2Vec2Processor, PreTrainedModel, AutoFeatureExtractor
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from transformers.file_utils import ModelOutput
@@ -57,11 +57,11 @@ def run_eval(model_path, save_path, output_path):
     #print(f"Device: {device}")
     
     config = AutoConfig.from_pretrained(model_path, local_files_only=True)
-    processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+    processor = AutoFeatureExtractor.from_pretrained(model_path, local_files_only=True) #AutoProcessor.from_pretrained(model_path, local_files_only=True)
     model = ModelForSpeechClassification.from_pretrained(pretrained_model_name_or_path=model_path, config=config, local_files_only=True).to(device)
     
     
-    target_sampling_rate = processor.feature_extractor.sampling_rate
+    target_sampling_rate = processor.sampling_rate
     
     
     def test_data_prep(path):
@@ -86,7 +86,7 @@ def run_eval(model_path, save_path, output_path):
     
     
     def predict(batch):
-        features = processor(batch['speech'], sampling_rate=processor.feature_extractor.sampling_rate, return_tensors="pt", padding=True)
+        features = processor(batch['speech'], sampling_rate=processor.sampling_rate, return_tensors="pt", padding=True)
         
         #with open('input_values.txt','r+') as f:
         #    val = f.readline()
@@ -184,5 +184,4 @@ def run_eval(model_path, save_path, output_path):
 # In[ ]:
 
 #run_eval('./model/final/06232023/wav2vec2-xlsr/146/', './data/train_test_validation/146/speaker_ind_True_100_80/', './outputs/wav2vec2-xlsr/emozionalmente/146/')
-
 
