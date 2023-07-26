@@ -169,24 +169,32 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
 
     print(train_dataset)
     def aug_helper(batch, augmentation):
-        print(len(batch['input_values']), len(batch['input_values'][0]))
-        print(np.array(batch['input_values']))
+        speech_augs_out = [augmentation(torch.tensor(data).unsqueeze(0).unsqueeze(0)) for data in batch['input_values']]
+        speech_augs = [out['samples'].squeeze() for out in speech_augs_out]
         
-        batch = torch.tensor(np.array(batch['input_values']).resize((len(batch),batch[0].shape[0],batch[0].shape[1])))
-        out = augmentation(batch)
-        return {'speech': out['samples']}
+        
+        return {'input_values': speech_augs}
+    temp_dataset = None
     for aug in model_params.augmentations:
-         aug_train_dataset = train_dataset.map(
+        aug_train_dataset = train_dataset.map(
                 aug_helper,
                 fn_kwargs={'augmentation': aug},
                 batch_size=batch_size,
                 batched=True,
                 num_proc=num_proc
                 )
-         print(aug_train_dataset)
-    raise("stop it")
+         #print(aug_train_dataset[0]['input_values'])
+         #raise("stop it")
+        print(aug)
+        if temp_dataset is None:
+            temp_dataset = aug_train_dataset
+        else:
+            temp_dataset = concatenate_datasets([temp_dataset, aug_train_dataset])
     
-    
+    print(temp_dataset)
+    train_dataset = concatenate_datasets([aug_train_dataset, temp_dataset])
+    print(train_dataset)
+    #raise('done')
     data_collator = DataCollatorCTCWithPadding(processor=processor, padding=True)
     is_regression = model_params.is_regression
     
