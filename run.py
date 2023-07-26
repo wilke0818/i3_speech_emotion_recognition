@@ -53,12 +53,13 @@ import pytorch_lightning as pl
 from optuna.integration import PyTorchLightningPruningCallback
 from sklearn.metrics import classification_report
 
+from augmentations import *
 from data import generate_dataset,load_saved_dataset
 from model_input import ModelInputParameters
 from utils import *
 import json
 
-def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_trials, resume_from_prev=False):
+def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_trials, resume_from_prev=False, skip_hp_search=False):
     speaker_independent_scenario = model_params.speaker_independent_scenario
     eval_steps = model_params.eval_steps
     logging_steps = model_params.logging_steps
@@ -78,7 +79,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     pooling_mode = model_params.pooling_mode
     
     
-    if not resume_from_prev:
+    if not resume_from_prev and not skip_hp_search:
         hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
             model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data)
     
@@ -116,7 +117,8 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     def speech_file_to_array_fn(path):
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
-        speech = resampler(speech_array).squeeze().numpy()
+        speech = resampler(speech_array)
+        speech = speech.squeeze().numpy()
         '''
         CUT = 4 # custom cut at 4 seconds for speeding up the data processing (not necessary)
         if len(speech) > 16000*CUT:
@@ -139,7 +141,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
         return result
     
-    if not resume_from_prev:
+    if not resume_from_prev and not skip_hp_search:
         hp_search_train_dataset = hp_search_train_dataset.map(
             preprocess_function,
             batch_size=batch_size,
@@ -164,6 +166,25 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         batched=True,
         num_proc=num_proc
     )
+
+    print(train_dataset)
+    def aug_helper(batch, augmentation):
+        print(len(batch['input_values']), len(batch['input_values'][0]))
+        print(np.array(batch['input_values']))
+        
+        batch = torch.tensor(np.array(batch['input_values']).resize((len(batch),batch[0].shape[0],batch[0].shape[1])))
+        out = augmentation(batch)
+        return {'speech': out['samples']}
+    for aug in model_params.augmentations:
+         aug_train_dataset = train_dataset.map(
+                aug_helper,
+                fn_kwargs={'augmentation': aug},
+                batch_size=batch_size,
+                batched=True,
+                num_proc=num_proc
+                )
+         print(aug_train_dataset)
+    raise("stop it")
     
     
     data_collator = DataCollatorCTCWithPadding(processor=processor, padding=True)
@@ -182,7 +203,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         else:
             return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
    
-    if not resume_from_prev:
+    if not resume_from_prev and not skip_hp_search:
         training_args = TrainingArguments(
             output_dir=model_output_dir,
             overwrite_output_dir=True,
@@ -224,7 +245,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     def my_objective(metrics):
         return metrics["eval_loss"]
         
-    if not resume_from_prev: 
+    if not resume_from_prev and not skip_hp_search: 
         trainer = CTCTrainer(
             model_init=model_init,
             data_collator=data_collator,
@@ -243,14 +264,14 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         best_run = trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, compute_objective=my_objective, n_trials=hp_num_trials)
         print(best_run)
     
-    if not resume_from_prev:
+    if not resume_from_prev and not skip_hp_search:
         training_args = TrainingArguments(
             output_dir=model_output_dir,
             evaluation_strategy="steps",
             per_device_train_batch_size=per_device_train_batch_size,
             per_device_eval_batch_size=per_device_eval_batch_size,
             gradient_accumulation_steps=4,
-            num_train_epochs=15,
+            num_train_epochs=50,
             # fp16=True,
             save_steps=save_steps,
             eval_steps=eval_steps,
@@ -312,7 +333,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
 
    
 
-    history = trainer.train()
+    history = trainer.train(resume_from_checkpoint=resume_from_prev)
     
     
     model.save_pretrained(model_path)
@@ -333,9 +354,27 @@ def main():
     else:
         seeds = np.arange(1)
 
+    augmentations = []
+    if models.get('augmentations', None):
+        for aug in models['augmentations'].values():
+            aug_name = aug.pop("class")
+            augmentations.append(create_union_augmentation(aug_name, aug))
     
-    print(seeds)
-    resume = True
+#    torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#    audio_samples = torch.ones(size=(8, 2, 32000), dtype=torch.float32, device=torch_device) +1.0
+
+#    print(audio_samples)
+#    for aug in augmentations:
+
+#        # Make an example tensor with white noise.
+#        # This tensor represents 8 audio snippets with 2 channels (stereo) and 2 s of 16 kHz audio.
+#        print(aug(audio_samples))
+#    print(seeds)
+    print(augmentations)
+#    return
+    resume = False
+    skip_hp_search = True
     for model in os.listdir(models['path_to_model_files']):
         confusion_matrices = {}
         accuracies = {}
@@ -345,6 +384,7 @@ def main():
         seeds = np.arange(models['cross_validation'])
         for seed in seeds:
             model_params.seed = seed
+            model_params.augmentations = augmentations
             model_path = os.path.join(models['output_path'],model_params.name)
             model_path = os.path.join(model_path, str(seed))
 
@@ -356,7 +396,7 @@ def main():
 
             default_eval_csv_path = f'./data/train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}/'
             run_model(model_params, model_path, output_path, models['hp_amount_of_training_data'], 
-                      models['hp_num_trials'], resume)
+                      models['hp_num_trials'], resume, skip_hp_search)
             
             for dataset in models['datasets']:
                 if dataset['name'] not in confusion_matrices.keys():
