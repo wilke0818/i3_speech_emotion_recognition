@@ -70,7 +70,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     per_device_eval_batch_size= model_params.per_device_batch_size
     batch_size = model_params.batch_size
     num_proc = 1
-    save_steps = eval_steps * 2
+    save_steps = eval_steps * 1
     model_output_dir=output_path
     model_name_or_path = model_params.model_path_or_name
     #model_name_or_path = "jonatasgrosman/wav2vec2-large-xlsr-53-italian"
@@ -331,7 +331,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     # In[ ]:
     
     #num_evals = round(len(train_dataset)/per_device_train_batch_size/4*15/10)
-    quit_after_evals = 10 #round(num_evals*.1)
+    quit_after_evals = 50 #round(num_evals*.1)
     print('Quitting after:', quit_after_evals)
     early_stopping_threshold = 0.01
     trainer.add_callback(EarlyStoppingCallback(quit_after_evals, early_stopping_threshold))

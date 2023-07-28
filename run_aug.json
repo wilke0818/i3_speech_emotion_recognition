@@ -1,0 +1,61 @@
+{
+	"path_to_model_files": "./model/inputs/07262023",
+	"output_path": "./model/final/07262023",
+	"hp_amount_of_training_data": 0.3,
+	"hp_num_trials": 5,
+	"cross_validation": 5,
+	"datasets": [
+		{
+			"name": "emovo",
+			"eval_csv_path": "./data/emovo/"
+		},
+		{
+			"name": "emozionalmente"
+		}
+	],
+	"augmentations": {
+		"PitchShift": {
+			"class": "PitchShift",
+			"sample_rate":16000,
+			"output_type":"dict",
+			"min_transpose_semitones":-4.0,
+			"max_transpose_semitones":4.0,
+			"p":1.0
+		},
+		"VolumeChange": {
+			"class": "Gain",
+			"min_gain_in_db":-12.0, 
+            		"max_gain_in_db":12.0, 
+            		"mode": "per_example",
+            		"p_mode": "per_example",
+            		"p": 1.0,
+            		"output_type":"dict"
+		},
+		"ImpulseResponse": {
+			"class": "ApplyImpulseResponse",
+			"ir_paths":"/om2/user/fabiocat/csad/data/audio/ir_folder/",
+            		"p":1.0,
+            		"p_mode":"per_example",
+            		"mode":"per_example",
+            		"sample_rate":16000,
+            		"output_type":"dict"
+		},
+		"BackgroundNoise": {
+			"class": "AddBackgroundNoise",
+			"background_paths":"/om2/user/fabiocat/csad/data/audio/backgrounds/augmentation/musan/",
+                        "output_type":"dict",
+                        "p":1.0,
+                        "sample_rate":16000,
+                        "p_mode":"per_example",
+                        "mode":"per_example",
+                        "min_snr_in_db":4.771,
+                        "max_snr_in_db":19.956
+		},
+		"TimeShift": {
+			"class": "Shift",
+			"min_shift": -0.25,
+			"max_shift": 0.25,
+			"p": 1.0
+		},
+	}
+}
