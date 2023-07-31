@@ -56,6 +56,7 @@ from sklearn.metrics import classification_report
 
 import shutil
 import os
+import json
 
 @dataclass
 class SpeechClassifierOutput(ModelOutput):
@@ -228,7 +229,7 @@ class PrinterCallback(TrainerCallback):
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         if state.is_local_process_zero:
             with open(args.logging_dir+"/logs.txt", "a") as f:
-                f.write(str(metrics))
+                f.write(json.dumps(metrics)+'\n')
                 print(str(metrics))
 
 class LoggingCallback(TrainerCallback):

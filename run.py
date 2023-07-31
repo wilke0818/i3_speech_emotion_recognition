@@ -58,6 +58,8 @@ from data import generate_dataset,load_saved_dataset
 from model_input import ModelInputParameters
 from utils import *
 import json
+import sys
+
 
 def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_trials, resume_from_prev=False, skip_hp_search=False):
     speaker_independent_scenario = model_params.speaker_independent_scenario
@@ -73,9 +75,6 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     save_steps = eval_steps * 1
     model_output_dir=output_path
     model_name_or_path = model_params.model_path_or_name
-    #model_name_or_path = "jonatasgrosman/wav2vec2-large-xlsr-53-italian"
-    #model_name_or_path = "facebook/wav2vec2-large-xlsr-53-italian"
-    #model_name_or_path = "facebook/wav2vec2-base-10k-voxpopuli-ft-it"
     pooling_mode = model_params.pooling_mode
     
     
@@ -169,32 +168,37 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
 
     print(train_dataset)
     def aug_helper(batch, augmentation):
-        speech_augs_out = [augmentation(torch.tensor(data).unsqueeze(0).unsqueeze(0)) for data in batch['input_values']]
-        speech_augs = [out['samples'].squeeze() for out in speech_augs_out]
-        
+        if augmentation[1]:
+          speech_augs_out = [augmentation[0](torch.tensor(data).unsqueeze(0).unsqueeze(0)) for data in batch['input_values']]
+          speech_augs = [out['samples'].squeeze() for out in speech_augs_out]
+        else:
+          speech_augs_out = [augmentation[0](data) for data in batch['input_values']]
+          speech_augs = speech_augs_out
         
         return {'input_values': speech_augs}
-    temp_dataset = None
-    for aug in model_params.augmentations:
-        aug_train_dataset = train_dataset.map(
-                aug_helper,
-                fn_kwargs={'augmentation': aug},
-                batch_size=batch_size,
-                batched=True,
-                num_proc=num_proc
-                )
-         #print(aug_train_dataset[0]['input_values'])
-         #raise("stop it")
-        print(aug)
-        if temp_dataset is None:
-            temp_dataset = aug_train_dataset
-        else:
-            temp_dataset = concatenate_datasets([temp_dataset, aug_train_dataset])
     
-    print(temp_dataset)
-    train_dataset = concatenate_datasets([aug_train_dataset, temp_dataset])
+    if len(model_params.augmentations) > 0:
+      temp_dataset = None
+      for aug in model_params.augmentations:
+          aug_train_dataset = train_dataset.map(
+                  aug_helper,
+                  fn_kwargs={'augmentation': aug},
+                  batch_size=batch_size,
+                  batched=True,
+                  num_proc=num_proc
+                  )
+           #print(aug_train_dataset[0]['input_values'])
+           #raise("stop it")
+          print(aug)
+          if temp_dataset is None:
+              temp_dataset = aug_train_dataset
+          else:
+              temp_dataset = concatenate_datasets([temp_dataset, aug_train_dataset])
+    
+      print(temp_dataset)
+      train_dataset = concatenate_datasets([aug_train_dataset, temp_dataset])
     print(train_dataset)
-    #raise('done')
+    raise('done')
     data_collator = DataCollatorCTCWithPadding(processor=processor, padding=True)
     is_regression = model_params.is_regression
     
@@ -350,8 +354,19 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
 
 def main():
     models = None
-    with open('run.json') as f:
-        models = json.load(f)
+
+    print(sys.argv)
+    if len(sys.argv) == 1:
+      json_file = 'run.json'
+    elif len(sys.argv) == 2:
+      json_file = sys.argv[1]
+    else:
+      json_file = sys.argv[1]
+      print("Wasn't expecting more than one argument. Using the first as the json file")
+
+    with open(json_file) as f:
+      print(json_file)
+      models = json.load(f)
 
     if not os.path.exists(models['output_path']):
         os.makedirs(models['output_path'])
@@ -363,22 +378,29 @@ def main():
         seeds = np.arange(1)
 
     augmentations = []
-    if models.get('augmentations', None):
-        for aug in models['augmentations'].values():
-            aug_name = aug.pop("class")
-            augmentations.append(create_union_augmentation(aug_name, aug))
     
-#    torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if models.get('augmentations', None):
+        for (aug_desc, aug) in models['augmentations'].items():
+            aug_name = aug.pop("class")
+            module_name = aug.pop("module")
+            use_tensors = aug.pop("tensors", True)
+            augmentations.append((create_union_augmentation(module_name,aug_name, aug), use_tensors, aug_desc))
+    
+    torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#    audio_samples = torch.ones(size=(8, 2, 32000), dtype=torch.float32, device=torch_device) +1.0
+    audio_samples = torch.ones(size=(8, 1, 32000), dtype=torch.float32, device=torch_device) +1.0
 
-#    print(audio_samples)
+    print(audio_samples)
 #    for aug in augmentations:
-
-#        # Make an example tensor with white noise.
-#        # This tensor represents 8 audio snippets with 2 channels (stereo) and 2 s of 16 kHz audio.
-#        print(aug(audio_samples))
-#    print(seeds)
+#        print(aug[2])        
+        # Make an example tensor with white noise.
+        # This tensor represents 8 audio snippets with 2 channels (stereo) and 2 s of 16 kHz audio.
+#        if aug[1]:
+#          print(aug[0](audio_samples, 16000))
+#        else:
+#          test = audio_samples.numpy()
+#          print(test.shape)
+#          print(aug[0](audio_samples.numpy()[0], 16000))
     print(augmentations)
 #    return
     resume = False

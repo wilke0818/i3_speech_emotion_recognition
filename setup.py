@@ -59,6 +59,6 @@ def generate_data_files():
       samples_df.iloc[index, samples_df.columns.get_loc('new_file_name')] = new_file_name
       os.system('cp data/audio/' + file_name + ' data/audio4analysis/' + new_file_name)
 
-#run_setup()
-run_download_data()
+run_setup()
+#run_download_data()
 
