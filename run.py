@@ -90,8 +90,9 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         print(hp_search_train_dataset)
         print(hp_search_eval_dataset)
 
+    #model_params.train_test_split = 0.2
     train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True)
-    
+     
     input_column = model_params.input_column
     output_column = model_params.output_column
     
@@ -169,10 +170,10 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     print(train_dataset)
     def aug_helper(batch, augmentation):
         if augmentation[1]:
-          speech_augs_out = [augmentation[0](torch.tensor(data).unsqueeze(0).unsqueeze(0)) for data in batch['input_values']]
+          speech_augs_out = [augmentation[0](torch.tensor(data).unsqueeze(0).unsqueeze(0), target_sampling_rate) for data in batch['input_values']]
           speech_augs = [out['samples'].squeeze() for out in speech_augs_out]
         else:
-          speech_augs_out = [augmentation[0](data) for data in batch['input_values']]
+          speech_augs_out = [augmentation[0](np.array(data), target_sampling_rate) for data in batch['input_values']]
           speech_augs = speech_augs_out
         
         return {'input_values': speech_augs}
@@ -198,7 +199,6 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
       print(temp_dataset)
       train_dataset = concatenate_datasets([aug_train_dataset, temp_dataset])
     print(train_dataset)
-    raise('done')
     data_collator = DataCollatorCTCWithPadding(processor=processor, padding=True)
     is_regression = model_params.is_regression
     
@@ -276,6 +276,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         best_run = trainer.hyperparameter_search(direction="minimize", backend="optuna", hp_space=my_hp_space, compute_objective=my_objective, n_trials=hp_num_trials)
         print(best_run)
     
+    epochs_number = 50
     if not resume_from_prev and not skip_hp_search:
         training_args = TrainingArguments(
             output_dir=model_output_dir,
@@ -283,7 +284,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
             per_device_train_batch_size=per_device_train_batch_size,
             per_device_eval_batch_size=per_device_eval_batch_size,
             gradient_accumulation_steps=4,
-            num_train_epochs=50,
+            num_train_epochs=epochs_number,
             # fp16=True,
             save_steps=save_steps,
             eval_steps=eval_steps,
@@ -300,7 +301,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
             per_device_train_batch_size=per_device_train_batch_size,
             per_device_eval_batch_size=per_device_eval_batch_size,
             gradient_accumulation_steps=4,
-            num_train_epochs=50, # TODO: CHANGE 50
+            num_train_epochs=epochs_number, # TODO: CHANGE 50
             #fp16=True,
             save_steps=save_steps,
             eval_steps=eval_steps,
@@ -333,9 +334,9 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     
     # In[ ]:
-    
-    #num_evals = round(len(train_dataset)/per_device_train_batch_size/4*15/10)
-    quit_after_evals = 50 #round(num_evals*.1)
+ 
+    num_evals = round(len(train_dataset)/per_device_train_batch_size/4*epochs_number)
+    quit_after_evals = 50 #round(num_evals*0.05) #round(num_evals*.1)
     print('Quitting after:', quit_after_evals)
     early_stopping_threshold = 0.01
     trainer.add_callback(EarlyStoppingCallback(quit_after_evals, early_stopping_threshold))
@@ -405,12 +406,17 @@ def main():
 #    return
     resume = False
     skip_hp_search = True
+
     for model in os.listdir(models['path_to_model_files']):
         confusion_matrices = {}
         accuracies = {}
         
         
         model_params = ModelInputParameters.fromJSON(os.path.join(models['path_to_model_files'],model))
+        if models.get('augmentations', None):
+            model_params.name += "__augmented__union" 
+
+
         seeds = np.arange(models['cross_validation'])
         for seed in seeds:
             model_params.seed = seed

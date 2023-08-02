@@ -34,7 +34,7 @@
     "ImpulseResponse": {
       "module": "torch_audiomentations",
       "class": "ApplyImpulseResponse",
-      "ir_paths":"om2/user/fabiocat/csad/data/audio/ir_folder/",
+      "ir_paths":"/om2/user/fabiocat/csad/data/audio/ir_folder/",
       "p":1.0,
       "p_mode":"per_example",
       "mode":"per_example",
@@ -44,7 +44,7 @@
     "BackgroundNoise": {
       "module": "torch_audiomentations",
       "class": "AddBackgroundNoise",
-      "background_paths":"om2/user/fabiocat/csad/data/audio/backgrounds/augmentation/musan/",
+      "background_paths":"/om2/user/fabiocat/csad/data/audio/backgrounds/augmentation/musan/",
       "output_type":"dict",
       "p":1.0,
       "sample_rate":16000,
@@ -77,7 +77,7 @@
     "FrequencyMask": {
       "module": "custom_augmentations",
       "class": "FrequencyMask",
-      "freq_mask_param": 50,
+      "freq_mask_param": 80,
       "p":1.0,
       "tensors": false
     }
