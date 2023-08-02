@@ -76,7 +76,7 @@ class ClassificationHead(nn.Module):
         super().__init__()
         self.config = config
         self.dropout = nn.Dropout(dropout_rate) if use_dropout else nn.Identity()
-        self.batch_norm = nn.BatchNorm2d(config.hidden_size) if use_batch_norm else nn.Identity()
+        self.batch_norm = nn.BatchNorm1d(config.hidden_size) if use_batch_norm else nn.Identity()
         self.relu=nn.ReLU()
         self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
 

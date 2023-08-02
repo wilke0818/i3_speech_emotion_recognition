@@ -1,0 +1,5 @@
+{
+	"model_path_or_name": "jonatasgrosman/wav2vec2-large-xlsr-53-italian",
+	"name": "wav2vec2-xlsr",
+	"per_device_batch_size": 32
+}

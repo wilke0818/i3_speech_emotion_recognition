@@ -1,0 +1,8 @@
+{
+	"model_path_or_name": "jonatasgrosman/wav2vec2-large-xlsr-53-italian",
+	"name": "jonatasgrosman_wav2vec2_large_xlsr_53_italian_batch_drop_50",
+	"per_device_batch_size": 16,
+	"use_dropout": true,
+	"dropout_rate": 0.50,
+	"use_batch_norm": true
+}

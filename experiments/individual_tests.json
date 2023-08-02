@@ -1,0 +1,16 @@
+{
+	"path_to_model_files": "./model/inputs/individual_tests",
+	"output_path": "./model/final/02082023",
+	"hp_amount_of_training_data": 0.3,
+	"hp_num_trials": 5,
+	"cross_validation": 5,
+	"datasets": [
+		{
+			"name": "emovo",
+			"eval_csv_path": "./data/emovo/"
+		},
+		{
+			"name": "emozionalmente"
+		}
+	]
+}

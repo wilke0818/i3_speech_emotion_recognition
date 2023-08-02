@@ -1,0 +1,10 @@
+{
+	"model_path_or_name": "jonatasgrosman/wav2vec2-large-xlsr-53-italian",
+	"name": "jonatasgrosman_wav2vec2_large_xlsr_53_italian_batch_drop_80_l2reg_epaca",
+	"per_device_batch_size": 16,
+	"use_dropout": true,
+	"dropout_rate": 0.80,
+	"use_batch_norm": true,
+	"use_l2_reg": true,
+	"pooling_mode": "epaca"
+}
