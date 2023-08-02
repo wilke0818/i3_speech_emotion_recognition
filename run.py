@@ -244,7 +244,12 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     def model_init():
         model = ModelForSpeechClassification.from_pretrained(
           model_name_or_path,
-          config=config
+          config=config,
+          use_dropout=model_params.use_dropout,
+          dropout_rate=model_params.dropout_rate,
+          use_batch_norm=model_params.use_batch_norm,
+          use_l2_reg=model_params.use_l2_reg,
+          weight_decay=model_params.weight_decay
         ).to('cuda')
         model.freeze_feature_extractor()
         return model

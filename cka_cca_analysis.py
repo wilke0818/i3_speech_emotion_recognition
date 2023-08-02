@@ -168,9 +168,12 @@ import sys
 import os
 import torch
 import torchaudio
-from tranformers import AutoModel
+from transformers import AutoModel
+from tqdm import tqdm
+import numpy as np
 
 def calculate_cka_cca(wav_files_path, model1_path, model2_path):
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
   audios = []
   wav_files = [os.path.join(wav_files_path, f) for f in os.listdir(wav_files_path) if len(f) > 4 and f[-4:] == '.wav']
   for file in tqdm(wav_files, desc='Loading Wav Files...'):
@@ -185,14 +188,16 @@ def calculate_cka_cca(wav_files_path, model1_path, model2_path):
     else:
       audios.append(audio.squeeze(0))
 
-  model1 = AutoModel.from_pretrained(mode1_path)
-  model2 = AutoModel.from_pretrained(model2_path)
+  model1 = AutoModel.from_pretrained(model1_path).to(device)
+  model2 = AutoModel.from_pretrained(model2_path).to(device)
 
   model1_embeddings = []
   model2_embeddings = []
   for audio in tqdm(audios):
-    model1_embeddings.append(model1(audio.unsqueeze(0)).mean(1).squeeze(0).cpu().detach().numpy())
-    model2_embeddings.append(model2(audio.unsqueeze(0)).mean(1).squeeze(0).cpu().detach().numpy())
+    with torch.no_grad():
+      audio = audio.unsqueeze(0).to(device)
+      model1_embeddings.append(model1(audio).last_hidden_state.mean(1).squeeze(0).detach().cpu().numpy())
+      model2_embeddings.append(model2(audio).last_hidden_state.mean(1).squeeze(0).detach().cpu().numpy())
 
   model1_embeddings = np.array(model1_embeddings)
   model2_embeddings = np.array(model2_embeddings)
@@ -204,4 +209,4 @@ def calculate_cka_cca(wav_files_path, model1_path, model2_path):
   print('Linear CKA from Features: {:.5f}'.format(cka_from_features))
   print('Mean Squared CCA Correlation: {:.5f}'.format(cca(model1_embeddings, model2_embeddings)))
 
-calculate_cka_cca('./data/audio4analysis', './model/final/06232023/wav2vec2-xlsr/411/', './model/final/06232023/wav2vec2-xlsr/583/')
+calculate_cka_cca('./data/audio4analysis', './model/final/06232023/wav2vec2-xlsr/411/', './model/final/06232023/wav2vec2-xlsr/411/')

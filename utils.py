@@ -58,6 +58,8 @@ import shutil
 import os
 import json
 
+from speechbrain.lobes.models.ECAPA_TDNN import ECAPA_TDNN
+
 @dataclass
 class SpeechClassifierOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
@@ -70,31 +72,40 @@ class SpeechClassifierOutput(ModelOutput):
 
 
 class ClassificationHead(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, use_dropout, dropout_rate, use_batch_norm):
         super().__init__()
         self.config = config
+        self.dropout = nn.Dropout(dropout_rate) if use_dropout else nn.Identity()
+        self.batch_norm = nn.BatchNorm2d(config.hidden_size) if use_batch_norm else nn.Identity()
         self.relu=nn.ReLU()
         self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
 
     def forward(self, features, **kwargs):
         x = features
         x = self.relu(x)
+        x = self.batch_norm(x)
+        x = self.dropout(x)
         x = self.out_proj(x)
         return x
 
 
 class ModelForSpeechClassification(PreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, use_dropout=False, dropout_rate=.5, 
+                 use_batch_norm=False, use_l2_reg=False, weight_decay=.01):
         super().__init__(config)
         self.num_labels = config.num_labels
-        self.pooling_mode = config.pooling_mode
+        self.pooling_mode = 'ecapa'#config.pooling_mode
         self.config = config
         self.config_class = config.__class__
-        print(config._name_or_path)
+        self.use_l2_reg = use_l2_reg,
+        self.weight_decay = weight_decay
+        
         self.model = AutoModel.from_pretrained(config._name_or_path)
-        self.classifier = ClassificationHead(config)
+        self.classifier = ClassificationHead(config, use_dropout, dropout_rate, use_batch_norm)
 
+        self.embedding = ECAPA_TDNN(config.hidden_size, lin_neurons=config.hidden_size) 
         self.init_weights()
+
 
     def freeze_feature_extractor(self):
         #self.model.freeze_feature_extractor()
@@ -111,6 +122,8 @@ class ModelForSpeechClassification(PreTrainedModel):
             outputs = torch.sum(hidden_states, dim=1)
         elif mode == "max":
             outputs = torch.max(hidden_states, dim=1)[0]
+        elif mode == "ecapa":
+            outputs = torch.squeeze(self.embedding(hidden_states))
         else:
             raise Exception(
                 "The pooling method hasn't been defined! Your pooling mode must be one of these ['mean', 'sum', 'max']")
@@ -158,6 +171,9 @@ class ModelForSpeechClassification(PreTrainedModel):
                 loss_fct = BCEWithLogitsLoss()
                 loss = loss_fct(logits, labels)
 
+            if self.use_l2_reg:
+                loss += self.l2_regularization_loss()
+
         if not return_dict:
             output = (logits,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
@@ -168,6 +184,13 @@ class ModelForSpeechClassification(PreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+
+    def l2_regularization_loss(self):
+        l2_loss = 0.0
+        for param in self.parameters():
+            l2_loss += torch.norm(param, 2) ** 2
+        return self.weight_decay * l2_loss
 
 
 @dataclass
