@@ -2,6 +2,8 @@ import pandas as pd
 import os
 
 def run_setup():
+    #TODO missing some requirements from here
+    #TODO This in fact could be a requirements.txt
     get_ipython().run_line_magic('conda', 'install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia')
     #get_ipython().run_line_magic('pip', 'install torch')
     #get_ipython().run_line_magic('pip', 'install torchaudio')
@@ -25,6 +27,8 @@ def run_setup():
     get_ipython().run_line_magic('pip', 'install pyctcdecode')
 
 def run_download_data():
+    #Download the emozionalmente data from our dropbox and setup the expected file structure
+    #TODO add EMOVO and make more generalizable
     os.system('mkdir -p data')
     os.system('wget -O audio.zip https://www.dropbox.com/s/tlbxkdabow9w03i/audio.zip')
     os.system('wget -O metadata.zip https://www.dropbox.com/s/gi1iwc3xwwl0a4z/metadata.zip')
@@ -59,6 +63,6 @@ def generate_data_files():
       samples_df.iloc[index, samples_df.columns.get_loc('new_file_name')] = new_file_name
       os.system('cp data/audio/' + file_name + ' data/audio4analysis/' + new_file_name)
 
-run_setup()
+#run_setup()
 #run_download_data()
 

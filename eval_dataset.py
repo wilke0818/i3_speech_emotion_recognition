@@ -54,7 +54,6 @@ import json
 
 def run_eval(model_path, save_path, output_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #print(f"Device: {device}")
     
     config = AutoConfig.from_pretrained(model_path, local_files_only=True)
     processor = AutoFeatureExtractor.from_pretrained(model_path, local_files_only=True) #AutoProcessor.from_pretrained(model_path, local_files_only=True)
@@ -69,7 +68,7 @@ def run_eval(model_path, save_path, output_path):
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
         speech = resampler(speech_array).squeeze().numpy()
-        if speech.shape[0]== 2:
+        if speech.shape[0]>1: #if not monochannel, average the channels together
             speech = np.mean(speech, 0)
             
         CUT = 4 # custom cut at 4 seconds for speeding up the data processing (not necessary)
@@ -80,72 +79,33 @@ def run_eval(model_path, save_path, output_path):
     
     
     test_dataset = load_dataset("csv", data_files={"test": save_path +"test.csv"}, delimiter="\t")["test"]
-    #print(test_dataset[0])
-    
-    # In[ ]:
-    
     
     def predict(batch):
         features = processor(batch['speech'], sampling_rate=processor.sampling_rate, return_tensors="pt", padding=True)
         
-        #with open('input_values.txt','r+') as f:
-        #    val = f.readline()
-        #    print('Input values are the same:',str(features.input_values)==val)
-        #with open('input_values.txt','r+') as f:
-        #    f.write(str(features.input_values))
-    
-        #with open('attention_mask.txt', 'r+') as f:
-        #    val = f.readline()
-        #    print('Same attention mask:', str(features.attention_mask)==val)
-        #with open('attention_mask.txt', 'r+') as f:
-        #    f.write(str(features.attention_mask))
-        #print(features)
-        #with open('x.txt', 'r+') as f:
-        #    print('Features same as previous run:',str(features)==f.readline())
-        #with open('x.txt', 'r+') as f:
-            #f.write(str(features))
         input_values = features.input_values.to(device)
         attention_mask = features.attention_mask.to(device)
         #print(input_values)
         with torch.no_grad():
             model_result = model(input_values, attention_mask=attention_mask)
-            #with open('model_results.txt', 'r+') as f:
-            #    val = f.readline()
-            #    print('Same results?',val==str(model_result))
-            #    print(val)
-            #    print(str(model_result))
-            #with open('model_results.txt', 'r+') as f:
-            #    f.write(str(model_result))
-            #print(model_result)
             logits = model_result.logits
     
         pred_ids = torch.argmax(logits, dim=-1).detach().cpu().numpy()
         batch["predicted"] = pred_ids
         return batch
     
-    
-    # In[ ]:
-    
     input_column = "path"
     output_column = "emotion"
     
-    #test_data_prep(test_dataset[0])
     test_dataset = test_dataset.map(test_data_prep)
-    #print(test_dataset[0])
-    
-    
-    # In[ ]:
-    
     
     result = test_dataset.map(predict, batched=True, batch_size=8)
-    #print(result)
-    
-    # In[ ]:
-    
     
     label_names = [config.id2label[i] for i in range(config.num_labels)]
     y_true = [config.label2id[name] for name in result["emotion"]]
     y_pred = result["predicted"]
+
+
     accuracy = 0
     with open(os.path.join(output_path, 'classification_report.json'), 'w') as f:
         eval_dict = classification_report(y_true, y_pred, target_names=label_names, output_dict=True)
@@ -179,9 +139,6 @@ def run_eval(model_path, save_path, output_path):
     return df_cm, accuracy
 
 
-# That's all, folks!
-
-# In[ ]:
-
+#An example call to this function, especially to run an evaluation on an already trained model
 #run_eval('./model/final/06232023/wav2vec2-xlsr/411/', './data/train_test_validation/411/speaker_ind_True_100_80/', './outputs/wav2vec2-xlsr/emozionalmente/411/')
 

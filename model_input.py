@@ -25,7 +25,8 @@ class ModelInputParameters:
     use_dropout: Optional[bool] = False,
     dropout_rate: Optional[float] = .5,
     use_l2_reg: Optional[bool] = False,
-    weight_decay: Optional[float] = .01
+    weight_decay: Optional[float] = .01,
+    number_of_training_epochs[int] = 50
 
     def fromJSON(path):
         with open(path) as f:

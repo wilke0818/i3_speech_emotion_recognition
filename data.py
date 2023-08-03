@@ -11,7 +11,6 @@ import torchaudio
 
 
 def my_split(df, data, state, training_amount):
-    print(df, data, state, training_amount)
     gss = GroupShuffleSplit(n_splits=1, train_size=training_amount, random_state=state)
     gss.get_n_splits()
 
@@ -50,10 +49,12 @@ def load_saved_dataset(save_path):
 
 def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=True, save=True, amount_of_data=1):
     data = []
-    print(seed, training_split, speaker_independent_scenario, save, amount_of_data)
     save_path = f'./data/train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}'
+    
+    #Code is deterministic so don't redo computation if we don't need to
     if os.path.exists(save_path):
         return load_saved_dataset(save_path)
+
 
     for path in tqdm(Path('./data/audio4analysis/').glob("**/*.wav")):
         name = str(path).split('/')[-1].split('.')[0]
@@ -83,6 +84,7 @@ def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=Tru
         males = df[df['gender'] == "male"]
         females = df[df['gender'] == "female"]
 
+        #Allow for getting a given amount of data rather than just a train/test split
         if amount_of_data != 1 and amount_of_data != 0:
             real_train_idx, real_test_idx = my_split(df,males,seed,amount_of_data)
             males = df.iloc[real_train_idx.astype(int)]
@@ -108,16 +110,11 @@ def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=Tru
         females_train_df = df.iloc[real_train_idx.astype(int)]
         females_val_df = df.iloc[real_val_idx.astype(int)]
     
-    #     print(males_train_df)
-    #     print(females_train_df)
-    
-    
         train_df = pd.concat([males_train_df,females_train_df])
     
-    #     print(train_df)
         test_df = pd.concat([males_test_df,females_test_df])
         val_df = pd.concat([males_val_df,females_val_df])
-    else:
+    else: #TODO implement data splits; right now this code only allows for train/test splits
         train_df, test_df = train_test_split(df, test_size=(1-training_amount), random_state=seed, stratify=df["emotion"])
         train_df, val_df = train_test_split(train_df, test_size=(1-training_amount), random_state=seed, stratify=train_df["emotion"])
 
@@ -127,7 +124,7 @@ def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=Tru
     test_df = test_df.reset_index(drop=True)
     val_df = val_df.reset_index(drop=True)
 
-    if not save:
+    if not save: #We typically want to save the data, but if not, just return the data
         return from_pandas(train_df), from_pandas(val_df), from_pandas(test_df)
 
     os.makedirs(save_path)

@@ -68,9 +68,6 @@ class SpeechClassifierOutput(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-# In[17]:
-
-
 class ClassificationHead(nn.Module):
     def __init__(self, config, use_dropout, dropout_rate, use_batch_norm):
         super().__init__()
@@ -247,7 +244,7 @@ class CTCTrainer(Trainer):
         return loss.detach()
 
 
-
+#TODO organize/cleanup these callbacks
 class PrinterCallback(TrainerCallback):
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         if state.is_local_process_zero:
