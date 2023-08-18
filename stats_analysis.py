@@ -4,6 +4,7 @@ import json
 
 results = {}
 
+#TODO make modular
 output_path = './outputs'
 models = os.listdir(output_path)
 
@@ -13,6 +14,7 @@ for model in models:
   model_path = os.path.join(output_path, model)
   if not os.path.isdir(model_path):
     continue
+  #Right now just prints model data as mean +/- standard deviation for each dataset
   print(model)
   results[model] = {}
   for dataset in os.listdir(model_path):

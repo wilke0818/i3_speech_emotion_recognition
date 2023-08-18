@@ -1,47 +1,97 @@
 import pandas as pd
 import os
+import requests
+from zipfile import ZipFile
+from tempfile import mkdtemp
+import wget
+import shutil
+import sys, argparse
 
-def run_setup():
-    get_ipython().run_line_magic('conda', 'install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia')
-    #get_ipython().run_line_magic('pip', 'install torch')
-    #get_ipython().run_line_magic('pip', 'install torchaudio')
-    get_ipython().run_line_magic('pip', 'install tensorflow')
-    get_ipython().run_line_magic('pip', 'install sklearn')
-    get_ipython().run_line_magic('pip', 'install scikit-learn')
-    get_ipython().run_line_magic('pip', 'install seaborn')
-    get_ipython().run_line_magic('pip', 'install datasets')
-    get_ipython().run_line_magic('pip', 'install optuna')
-    get_ipython().run_line_magic('pip', 'install pytorch-lightning')
-    get_ipython().run_line_magic('pip', 'install tqdm')
-    get_ipython().run_line_magic('pip', 'install transformers')
-    get_ipython().run_line_magic('pip', 'install requests')
-    get_ipython().run_line_magic('pip', 'install wandb')
-    get_ipython().run_line_magic('pip', 'install datasets')
-    get_ipython().run_line_magic('pip', 'install soundfile')
-    get_ipython().run_line_magic('pip', 'install accelerate')
-    get_ipython().run_line_magic('pip', 'install nvidia-tensorrt')
-    get_ipython().run_line_magic('pip', 'install nvidia-pyindex')
-    get_ipython().run_line_magic('pip', 'install https://github.com/kpu/kenlm/archive/master.zip')
-    get_ipython().run_line_magic('pip', 'install pyctcdecode')
+def run_download_data(download_emozionalmente=True, download_emovo=False):
+    #Download the emozionalmente data from our dropbox and setup the expected file structure
+    #TODO add EMOVO and make more generalizable
+    if not os.path.exists('./data'):
+        os.makedirs('./data')
 
-def run_download_data():
-    os.system('mkdir -p data')
-    os.system('wget -O audio.zip https://www.dropbox.com/s/tlbxkdabow9w03i/audio.zip')
-    os.system('wget -O metadata.zip https://www.dropbox.com/s/gi1iwc3xwwl0a4z/metadata.zip')
-    os.system('unzip audio.zip')
-    os.system('unzip metadata.zip')
-    os.system('mv ./audio/ ./data/audio/')
-    os.system('mv ./metadata/ ./data/metadata/')
-    os.system('rm -rf __MACOSX')
-    os.system('rm -rf audio.zip')
-    os.system('rm -rf metadata.zip')
-    generate_data_files()
+    if download_emozionalmente:
+        if not os.path.exists('./data/audio4analysis/'):
+            os.makedirs('./data/audio4analysis/')
 
+
+        metadata_file = wget.download('https://www.dropbox.com/s/gi1iwc3xwwl0a4z/metadata.zip?dl=1')
+    
+        audio_file = wget.download('https://www.dropbox.com/s/tlbxkdabow9w03i/audio.zip?dl=1')
+    
+        print('Downloaded the metadata and audio zip files')
+        print('Extracting the audio zip file. This may take a few minutes')
+        with ZipFile(audio_file, 'r') as zip_ref:
+            zip_ref.extractall('./data/')
+
+        print('Successfully extracted the audio zip file')
+    
+        with ZipFile(metadata_file, 'r') as zip_ref:
+            zip_ref.extractall('./data/')
+
+        print('Successfully extracted the metadata zip file')
+
+        os.remove(metadata_file)
+        os.remove(audio_file)
+        print('removed the zip files')
+        print('Generating data files in audio4analysis. This may take a few minutes')
+        generate_data_files()
+
+    if download_emovo:
+        emovo_file = wget.download('https://drive.google.com/u/0/uc?id=1SUtaKeA-LYnKaD3qv87Y5wYgihJiNJAo&export=download&confirm=1')
+    
+        print('Downloaded emovo zip')
+        print('Extracting the emovo zip file. This may take a few minutes')
+        with ZipFile(emovo_file, 'r') as zip_ref:
+            zip_ref.extractall('./data/')
+        
+        os.remove(emovo_file)
+        process_emovo_data()
+        print('processed emovo data files to generate a test.csv')
+
+def process_emovo_data():
+  import torchaudio
+
+  actors = ['f1', 'f2', 'f3', 'm1', 'm2', 'm3']
+
+  emotions = {
+    'dis': 'disgust',
+    'gio': 'joy',
+    'neu': 'neutrality',
+    'pau': 'fear',
+    'rab': 'anger',
+    'sor': 'surprise',
+    'tri': 'sadness'
+  }
+
+  data = []
+
+  for actor in actors:
+      directory = os.path.join('./data/EMOVO/',actor)
+      for f in os.listdir(directory):
+          with open(os.path.join(directory, f)) as file:
+              letter = actor[0]
+              #print(letter)
+              gender = 'male' if bool(str(actor[0])=="m") else 'female' #no other's in this dataset
+              emotion = emotions[f[0:3]]
+              person = 3*(actor[0]=='m')+int(actor[1])
+              path = os.path.join('./data/',f'EMOVO/{actor}/{f}')
+              data.append({
+                  'gender': gender,
+                  'emotion': emotion,
+                  'actor': str(person),
+                  'path': path
+                  })
+  df = pd.DataFrame(data)
+
+  df.to_csv(f"./data/EMOVO/test.csv", sep="\t", encoding="utf-8", index=False)
 
 def generate_data_files():
     users_df = pd.read_csv("data/metadata/users.csv")
     samples_df = pd.read_csv("data/metadata/samples.csv")
-    os.system('mkdir -p data/audio4analysis')
 
     samples_df['actor_gender'] = None
     samples_df['actor_age'] = None
@@ -57,8 +107,29 @@ def generate_data_files():
       samples_df.iloc[index, samples_df.columns.get_loc('actor_age')] = age
       samples_df.iloc[index, samples_df.columns.get_loc('actor_gender')] = gender
       samples_df.iloc[index, samples_df.columns.get_loc('new_file_name')] = new_file_name
-      os.system('cp data/audio/' + file_name + ' data/audio4analysis/' + new_file_name)
+      shutil.copyfile(f'data/audio/{file_name}', f'data/audio4analysis/{new_file_name}')
 
-run_setup()
-#run_download_data()
+
+def main():
+  parser=argparse.ArgumentParser()
+
+  parser.add_argument("--only_emovo", type=int, help="Download only emovo, uses 0 or 1")
+  parser.add_argument("--include_emovo", type=int, help="Download all data including emovo, uses 0 or 1")
+
+  args=parser.parse_args()
+  if args.include_emovo == 1:
+      run_download_data(True, True)
+  elif args.only_emovo == 1:
+      run_download_data(False, True)
+  else:
+      run_download_data(True, False)
+
+  if args.only_emovo and args.only_emovo != 1 and args.only_emovo != 0:
+        print('Expected only 0 and 1 for --only_emovo')
+  if args.include_emovo and args.include_emovo != 1 and args.include_emovo != 0:
+        print('Expected only 0 and 1 for --include_emovo')
+
+
+if __name__=="__main__":
+  main()
 
