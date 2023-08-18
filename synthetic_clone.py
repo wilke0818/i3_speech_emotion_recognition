@@ -6,7 +6,7 @@ import os
 from tqdm import tqdm
 from TTS.api import TTS
 import random
-from utils import apply_func_to_all_wavs
+#from utils import apply_func_to_all_wavs
 
 
 parser=argparse.ArgumentParser()
@@ -48,7 +48,7 @@ if not args.output_path or not args.input_path:
 if not os.path.exists(args.output_path):
   os.makedirs(args.output_path)
 
-'''
+
 def apply_func_to_all_wavs(input_path, output_path, func):
   files = os.listdir(input_path)
   for file in files:
@@ -57,12 +57,9 @@ def apply_func_to_all_wavs(input_path, output_path, func):
     if os.path.isdir(input_file):
       if not os.path.exists(output_file):
         os.makedirs(output_file)
-      apply_func_all_wavs(input_file, output_file, func)
+      apply_func_to_all_wavs(input_file, output_file, func)
     elif file.endswith('.wav'):
       func(input_file, output_file)
-
-'''
-
 
 tts = TTS("tts_models/multilingual/multi-dataset/bark", gpu=torch.cuda.is_available())
 
