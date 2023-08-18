@@ -431,16 +431,20 @@ def main():
             #Evaluate the model that was just trained
             for dataset in experiment['datasets']:
                 if dataset['name'] not in confusion_matrices.keys():
-                    confusion_matrices[dataset['name']] = []
+                    confusion_matrices[dataset['name']] = {'overall': []}
                     accuracies[dataset['name']] = []
 
                 eval_out_path = os.path.join('./outputs/', model_params.name, dataset['name'], str(seed))
                 if not os.path.exists(eval_out_path):
                     os.makedirs(eval_out_path)
                 eval_csv_path = dataset.get('eval_csv_path', default_eval_csv_path)
-                cm, accuracy = run_eval(model_path, eval_csv_path, eval_out_path)
+                cm, accuracy, gendered_cms = run_eval(model_path, eval_csv_path, eval_out_path)
 
-                confusion_matrices[dataset['name']].append(cm)
+                confusion_matrices[dataset['name']]['overall'].append(cm)
+                for gender, gender_cm in gendered_cms.items():
+                  if gender not in confusion_matrices[dataset['name']].keys():
+                    confusion_matrices[dataset['name']][gender] = []
+                  confusion_matrices[dataset['name']][gender].append(gender_cm)
                 accuracies[dataset['name']].append(accuracy)
         #For a model architecture/settings in this experiment, create a single, averaged confusion matrix of all runs of it
         for dataset in confusion_matrices.keys():

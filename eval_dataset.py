@@ -51,6 +51,8 @@ from transformers import (
 from sklearn.metrics import classification_report
 from utils import *
 import json
+from audiomentations import LoudnessNormalization, Compose, AddGaussianNoise
+
 
 def run_eval(model_path, save_path, output_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -68,9 +70,14 @@ def run_eval(model_path, save_path, output_path):
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
         speech = resampler(speech_array).squeeze().numpy()
-        if speech.shape[0]>1: #if not monochannel, average the channels together
+        augment = Compose([
+          LoudnessNormalization(min_lufs=-23, max_lufs=-23, p=1)
+        ])
+        
+        if len(speech.shape) > 1 and speech.shape[0]>1: #if not monochannel, average the channels together
             speech = np.mean(speech, 0)
-            
+
+        speech = augment(speech, target_sampling_rate)    
         CUT = 4 # custom cut at 4 seconds for speeding up the data processing (not necessary)
         #if len(speech) > 16000*CUT:
             #print(speech)
@@ -115,30 +122,38 @@ def run_eval(model_path, save_path, output_path):
         accuracy = eval_dict['accuracy']
         f.write(eval_json)
     
-    
-    # In[ ]:
-    
-    
     emotions = label_names
-    cm=confusion_matrix(y_true, y_pred)
+    genders = set([x['gender'] for x in result])
+    genders_cm = {}
+    for gender in genders:
+      y_true_gender = [config.label2id[x['emotion']] for x in result if x['gender']==gender]
+      y_pred_gender = [x['predicted'] for x in result if x['gender']==gender]
+      df_cm_gender = make_cm(emotions, y_true_gender, y_pred_gender, os.path.join(output_path, f'{gender}_confusion_matrix.png'))
+      genders_cm[gender] = df_cm_gender 
     
-    df_cm = pd.DataFrame(cm.astype('float') / cm.sum(axis=1), index = [i for i in emotions],
-                      columns = [i for i in emotions])
+    df_cm = make_cm(emotions, y_true, y_pred, os.path.join(output_path, 'confusion_matrix.png'))
+    return df_cm, accuracy, df_cm_gender
+
+def make_cm(label_names, y_true, y_pred, output_name):
+    cm=confusion_matrix(y_true, y_pred)
+
+    df_cm = pd.DataFrame(cm.astype('float') / cm.sum(axis=1), index = [i for i in label_names],
+                      columns = [i for i in label_names])
     l = 16
     fig, ax = plt.subplots(figsize=(l,l/2))
     sn.heatmap(df_cm, annot=True, cmap="coolwarm")
     ax.set(xlabel='Recognized emotion', ylabel='Expressed emotion')
     ax.xaxis.label.set_size(20)
     ax.yaxis.label.set_size(20)
-    
+
     # We change the fontsize of minor ticks label
     ax.tick_params(axis='both', which='major', labelsize=12)
     ax.tick_params(axis='both', which='minor', labelsize=12)
-    
-    fig.savefig(os.path.join(output_path, 'confusion_matrix.png'))
-    return df_cm, accuracy
+
+    fig.savefig(output_name)
+    return df_cm
 
 
 #An example call to this function, especially to run an evaluation on an already trained model
-#run_eval('./model/final/06232023/wav2vec2-xlsr/411/', './data/train_test_validation/411/speaker_ind_True_100_80/', './outputs/wav2vec2-xlsr/emozionalmente/411/')
+#run_eval('./Untitled/0/', './data/EMOVO/', './outputs/test2/EMOVO_normalized/')
 

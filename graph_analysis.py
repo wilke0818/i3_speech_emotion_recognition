@@ -7,12 +7,21 @@ from datetime import datetime
 import argparse, sys
 from tensorflow.python.summary.summary_iterator import summary_iterator
 
+parser=argparse.ArgumentParser()
+
+parser.add_argument("--output_path", help="Where to save the graph. Should include file name. If not set then attempts to show graph")
+parser.add_argument("--input_path", help="Input path. Defaults to ./logs and must follow subdirectory structure of /model_name/seed/runs/auto_generated_log_folder_name")
+
+args=parser.parse_args()
 
 #TODO make file modular
 results = {}
 
 #Assumes the logs base file is in the logs subdirectory (ie the logs go logs/model_name/seed/runs/auto_generated_log_folder_name/)
-log_path = './logs'
+if args.input_path:
+  log_path = args.input_path
+else:
+  log_path = './logs'
 models = os.listdir(log_path)
 
 for model in models:
@@ -67,6 +76,7 @@ for model in models:
 
 fig, (ax1, ax2) = plt.subplots(1,2, figsize=(14,10), sharex=True)
 
+'''
 #Finds the seed for each model that generated the best eval loss and accuracy and uses that as the model to graph
 #TODO make this functionality dynamic/allow user to choose what they want graphed
 best_model_map = {}
@@ -99,14 +109,21 @@ for model in results:
   last_line = ax2.plot(results[model][best_model_map[model]['eval_loss']]['epochs'],results[model][best_model_map[model]['eval_loss']]['eval_loss'])
   
   ax2.plot(results[model][best_model_map[model]['eval_loss']]['epochs'],results[model][best_model_map[model]['eval_loss']]['train_loss'], color=last_line[0].get_color(), linestyle='dashed')
- 
+'''
+for model in results:
+  #TODO clean up this code
+  ax1.plot(results[model]['0']['epochs'],results[model]['0']['eval_accuracy'], label=model)
 
+  #For loss, we will also plot the training loss as a dashed line of the same color
+  last_line = ax2.plot(results[model]['0']['epochs'],results[model]['0']['eval_loss'])
+  
+  ax2.plot(results[model]['0']['epochs'],results[model]['0']['train_loss'], color=last_line[0].get_color(), linestyle='dashed')
 ax1.set(title='Eval Accuracy')
 ax1.set(ylabel="Percentage")
 ax2.set(title='Loss')
 ax2.set(ylabel="Cross Entropy Loss")
 
-fig.supxlabel("Evaluation number")
+fig.supxlabel("Epoch number")
 
 lines = []
 labels = []
@@ -116,14 +133,8 @@ for ax in fig.axes:
     labels.extend(Label)
 fig.legend(lines, labels, loc='upper right')
 
-parser=argparse.ArgumentParser()
 
-parser.add_argument("--save_path", help="Where to save the graph. If not set then attempts to show graph")
-
-
-args=parser.parse_args()
-
-if args.save_path:
-  fig.savefig(args.save_path)
+if args.output_path:
+  fig.savefig(args.output_path)
 else:
   plt.show()

@@ -69,7 +69,7 @@ class SpeechClassifierOutput(ModelOutput):
 
 
 class ClassificationHead(nn.Module):
-    def __init__(self, config, use_dropout, dropout_rate, use_batch_norm):
+    def __init__(self, config, use_dropout=False, dropout_rate=.5, use_batch_norm=False):
         super().__init__()
         self.config = config
         self.dropout = nn.Dropout(dropout_rate) if use_dropout else nn.Identity()
@@ -91,7 +91,7 @@ class ModelForSpeechClassification(PreTrainedModel):
                  use_batch_norm=False, use_l2_reg=False, weight_decay=.01):
         super().__init__(config)
         self.num_labels = config.num_labels
-        self.pooling_mode = 'ecapa'#config.pooling_mode
+        self.pooling_mode = config.pooling_mode
         self.config = config
         self.config_class = config.__class__
         self.use_l2_reg = use_l2_reg,
@@ -274,3 +274,17 @@ class MemorySaverCallback(TrainerCallback):
 
     def on_train_end(self, args, state, control, **kwargs):
         self.run_num+=1
+
+
+def apply_func_to_all_wavs(input_path, output_path, func):
+  files = os.listdir(input_path)
+  for file in tqdm(files):
+    input_file = os.path.join(input_path, file)
+    output_file = os.path.join(output_path, file)
+    if os.path.isdir(input_file):
+      apply_func_to_all_wavs(input_file, output_file, func)
+    elif file.endswith('.wav'):
+      if not os.path.exists(output_path):
+        os.makedirs(output_path)
+      func(input_file, output_file)
+
