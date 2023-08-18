@@ -20,11 +20,11 @@ class ModelInputParameters:
     output_column: Optional[str] = 'emotion'
     is_regression: Optional[bool] = False
     train_test_split: Optional[float] = .8
-    seed: Optional[int] = 0,
-    use_batch_norm: Optional[bool] = False,
-    use_dropout: Optional[bool] = False,
-    dropout_rate: Optional[float] = .5,
-    use_l2_reg: Optional[bool] = False,
+    seed: Optional[int] = 0
+    use_batch_norm: Optional[bool] = False
+    use_dropout: Optional[bool] = False
+    dropout_rate: Optional[float] = .5
+    use_l2_reg: Optional[bool] = False
     weight_decay: Optional[float] = .01
 
     def fromJSON(path):

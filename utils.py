@@ -72,13 +72,14 @@ class SpeechClassifierOutput(ModelOutput):
 
 
 class ClassificationHead(nn.Module):
-    def __init__(self, config, use_dropout, dropout_rate, use_batch_norm):
+    def __init__(self, config, use_dropout, dropout_rate, use_batch_norm, weight_decay):
         super().__init__()
         self.config = config
         self.dropout = nn.Dropout(dropout_rate) if use_dropout else nn.Identity()
         self.batch_norm = nn.BatchNorm1d(config.hidden_size) if use_batch_norm else nn.Identity()
         self.relu=nn.ReLU()
         self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
+        self.weight_decay = weight_decay
 
     def forward(self, features, **kwargs):
         x = features
@@ -87,6 +88,12 @@ class ClassificationHead(nn.Module):
         x = self.dropout(x)
         x = self.out_proj(x)
         return x
+
+    def l2_regularization_loss(self):
+        l2_loss = 0.0
+        for param in self.parameters():
+            l2_loss += torch.norm(param, 2) ** 2
+        return self.weight_decay * l2_loss
 
 
 class ModelForSpeechClassification(PreTrainedModel):
@@ -97,11 +104,10 @@ class ModelForSpeechClassification(PreTrainedModel):
         self.pooling_mode = 'ecapa'#config.pooling_mode
         self.config = config
         self.config_class = config.__class__
-        self.use_l2_reg = use_l2_reg,
-        self.weight_decay = weight_decay
+        self.use_l2_reg = use_l2_reg
         
         self.model = AutoModel.from_pretrained(config._name_or_path)
-        self.classifier = ClassificationHead(config, use_dropout, dropout_rate, use_batch_norm)
+        self.classifier = ClassificationHead(config, use_dropout, dropout_rate, use_batch_norm, weight_decay)
 
         self.embedding = ECAPA_TDNN(config.hidden_size, lin_neurons=config.hidden_size) 
         self.init_weights()
@@ -172,7 +178,7 @@ class ModelForSpeechClassification(PreTrainedModel):
                 loss = loss_fct(logits, labels)
 
             if self.use_l2_reg:
-                loss += self.l2_regularization_loss()
+                loss += self.classifier.l2_regularization_loss()
 
         if not return_dict:
             output = (logits,) + outputs[2:]
@@ -184,13 +190,6 @@ class ModelForSpeechClassification(PreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
-
-
-    def l2_regularization_loss(self):
-        l2_loss = 0.0
-        for param in self.parameters():
-            l2_loss += torch.norm(param, 2) ** 2
-        return self.weight_decay * l2_loss
 
 
 @dataclass
