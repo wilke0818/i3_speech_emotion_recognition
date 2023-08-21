@@ -47,16 +47,16 @@ def load_saved_dataset(save_path):
 
 
 
-def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=True, save=True, amount_of_data=1):
+def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=True, save=True, amount_of_data=1, data_path='./data/audio4analysis'):
     data = []
-    save_path = f'./data/train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}'
+    save_path = f'./{data_path}/train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}'
     
     #Code is deterministic so don't redo computation if we don't need to
-    if os.path.exists(save_path):
+    if os.path.exists(save_path) and 'train.csv' in os.listdir(save_path):
         return load_saved_dataset(save_path)
 
 
-    for path in tqdm(Path('./data/audio4analysis/').glob("**/*.wav")):
+    for path in tqdm(Path(data_path).glob("**/*.wav")):
         name = str(path).split('/')[-1].split('.')[0]
         original_name = str(name).split('____')[-1]
         label = str(name).split('____')[-2]

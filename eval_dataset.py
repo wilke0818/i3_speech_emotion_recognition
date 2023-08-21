@@ -137,7 +137,7 @@ def run_eval(model_path, save_path, output_path):
 def make_cm(label_names, y_true, y_pred, output_name):
     cm=confusion_matrix(y_true, y_pred)
 
-    df_cm = pd.DataFrame(cm.astype('float') / cm.sum(axis=1), index = [i for i in label_names],
+    df_cm = pd.DataFrame(cm.astype('float') / cm.sum(axis=1, keepdims=True), index = [i for i in label_names],
                       columns = [i for i in label_names])
     l = 16
     fig, ax = plt.subplots(figsize=(l,l/2))
@@ -155,5 +155,5 @@ def make_cm(label_names, y_true, y_pred, output_name):
 
 
 #An example call to this function, especially to run an evaluation on an already trained model
-#run_eval('./Untitled/0/', './data/EMOVO/', './outputs/test2/EMOVO_normalized/')
+run_eval('./jonatasgrosman_wav2vec2_large_xlsr_53_italian/0/', './data/EMOVO/', './outputs/jonatasgrosman_wav2vec2_large_xlsr_53_italian/emovo/0/')
 

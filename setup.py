@@ -49,10 +49,10 @@ def run_download_data(download_emozionalmente=True, download_emovo=False):
             zip_ref.extractall('./data/')
         
         os.remove(emovo_file)
-        process_emovo_data()
+        process_emovo_data('./data/EMOVO/')
         print('processed emovo data files to generate a test.csv')
 
-def process_emovo_data():
+def process_emovo_data(emovo_dir):
   import torchaudio
 
   actors = ['f1', 'f2', 'f3', 'm1', 'm2', 'm3']
@@ -70,7 +70,7 @@ def process_emovo_data():
   data = []
 
   for actor in actors:
-      directory = os.path.join('./data/EMOVO/',actor)
+      directory = os.path.join(emovo_dir,actor)
       for f in os.listdir(directory):
           with open(os.path.join(directory, f)) as file:
               letter = actor[0]
@@ -78,7 +78,7 @@ def process_emovo_data():
               gender = 'male' if bool(str(actor[0])=="m") else 'female' #no other's in this dataset
               emotion = emotions[f[0:3]]
               person = 3*(actor[0]=='m')+int(actor[1])
-              path = os.path.join('./data/',f'EMOVO/{actor}/{f}')
+              path = os.path.join(emovo_dir,f'{actor}/{f}')
               data.append({
                   'gender': gender,
                   'emotion': emotion,
@@ -87,7 +87,7 @@ def process_emovo_data():
                   })
   df = pd.DataFrame(data)
 
-  df.to_csv(f"./data/EMOVO/test.csv", sep="\t", encoding="utf-8", index=False)
+  df.to_csv(f"{emovo_dir}/test.csv", sep="\t", encoding="utf-8", index=False)
 
 def generate_data_files():
     users_df = pd.read_csv("data/metadata/users.csv")

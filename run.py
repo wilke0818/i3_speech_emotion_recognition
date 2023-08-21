@@ -82,7 +82,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     if not resume_from_prev and not skip_hp_search:
         #Generate data for hyperparameter search
         hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
-            model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data)
+            model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data, model_params.training_data_path)
     
        #Since test set is not used for hp search, combine eval and train back together and use the original test set for eval: gives the desired train/test split with the amount of data specified
 
@@ -93,7 +93,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         print(hp_search_eval_dataset)
 
     #generates train, validation, and test set from the emozionalmente dataset
-    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True)
+    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, model_params.training_data_path)
      
     label_list = train_dataset.unique(output_column)
     label_list.sort()  # Let's sort it for determinism
@@ -406,9 +406,10 @@ def main():
         if len(augmentations) > 0:
             model_params.name += "__augmented__union" 
 
-
+        
         seeds = np.arange(experiment['cross_validation'])
         for seed in seeds:
+            model_params.training_data_path = experiment['training_data_path']
             model_params.seed = seed
             model_params.augmentations = augmentations
             model_path = os.path.join(experiment['output_path'],model_params.name)
@@ -422,7 +423,7 @@ def main():
             output_path = f'./{model_params.name}/{seed}/'
 
             #Default path based off of emozionalmente test set that is generated
-            default_eval_csv_path = f'./data/train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}/'
+            default_eval_csv_path = f'./{model_params.training_data_path}/train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}/'
             
             #Train the given model
             run_model(model_params, model_path, output_path, experiment['hp_amount_of_training_data'], 
