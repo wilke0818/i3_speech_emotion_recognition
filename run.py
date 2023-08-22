@@ -93,7 +93,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         print(hp_search_eval_dataset)
 
     #generates train, validation, and test set from the emozionalmente dataset
-    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, model_params.training_data_path)
+    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, data_path=model_params.training_data_path)
      
     label_list = train_dataset.unique(output_column)
     label_list.sort()  # Let's sort it for determinism
@@ -339,7 +339,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
  
     num_evals = round(len(train_dataset)/per_device_train_batch_size/4*epochs_number) #Not currently used
 
-    quit_after_evals = 50 #Quit after 50 evals of not seeing the threshold improvement (50 evals = 500 steps; dependent on batch size, and training dataset size) #round(num_evals*0.05) #round(num_evals*.1)
+    quit_after_evals = 25 #Quit after 50 evals of not seeing the threshold improvement (50 evals = 500 steps; dependent on batch size, and training dataset size) #round(num_evals*0.05) #round(num_evals*.1)
     print('Quitting after:', quit_after_evals)
     early_stopping_threshold = 0.01
     trainer.add_callback(EarlyStoppingCallback(quit_after_evals, early_stopping_threshold))

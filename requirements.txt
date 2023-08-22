@@ -21,4 +21,3 @@ torchaudio==2.0.2
 tqdm==4.65.0
 transformers==4.30.2
 wget
-TTS
