@@ -55,8 +55,8 @@ for model in models:
         sub_path = os.listdir(sub_path)[0]
       else: #if there were no logs for this seed, just continue onward; this should never be the case
         continue
-
-      if os.path.isdir(sub_path) and os.path.exists(os.path.join(sub_path, 'logs.txt')):
+      print(sub_path)
+      if os.path.isdir(sub_path):
         
         #there should be 2 log files: a tensorflow log file and a logs.txt file; the tensorflow file in fact contains all the information we want 
         other_log = [os.path.join(sub_path, f) for f in os.listdir(sub_path) if f!='logs.txt'][0]
@@ -74,6 +74,7 @@ for model in models:
               if len(results[model][model_run]['epochs'])==0 or results[model][model_run]['epochs'][-1] != v.simple_value:
                 results[model][model_run]['epochs'].append(v.simple_value)
 
+print(results)
 fig, (ax1, ax2) = plt.subplots(1,2, figsize=(14,10), sharex=True)
 
 '''

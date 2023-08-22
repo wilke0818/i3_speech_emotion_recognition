@@ -1,19 +1,14 @@
 
 #TODO many redundant imports
-from eval_dataset import run_eval
 
-import matplotlib.pyplot as plt
+import csv
 import torch
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from tqdm import tqdm
 import torchaudio
-from sklearn.model_selection import train_test_split
 import os
-import sys
+import sys, argparse
 from collections import OrderedDict
-import IPython.display as ipd
 from sklearn.model_selection import GroupShuffleSplit
 from datasets import load_dataset, load_metric, concatenate_datasets
 from transformers import AutoConfig, AutoProcessor, AutoModel, Wav2Vec2Processor, AutoFeatureExtractor
@@ -53,15 +48,13 @@ import optuna
 from optuna.trial import TrialState
 import pytorch_lightning as pl
 from optuna.integration import PyTorchLightningPruningCallback
-from sklearn.metrics import classification_report
 
 from augmentations import *
 from data import generate_dataset,load_saved_dataset
 from model_input import ModelInputParameters
 from utils import *
 import json
-import sys
-
+import time
 
 def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_trials, resume_from_prev=False, skip_hp_search=False):
     speaker_independent_scenario = model_params.speaker_independent_scenario
@@ -356,14 +349,22 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
 def main():
     experiment = None
 
+
+    parser=argparse.ArgumentParser()
+
+    parser.add_argument("--low_seed", type=int, help="The lowest seed to use. If not set defaults to 0.")
+    parser.add_argument("--high_seed", type=int, help="The highest seed to use. If not set defaults to the start seed plus the number of cross validations.")
+    parser.add_argument("--experiment_file", help="The path to the experiment file that controls this experiment run")
+
+    args=parser.parse_args()
+
     #JSON setup file either defaults to run.json or can be passed as un-named command line argument
-    if len(sys.argv) == 1:
-      json_file = 'run.json'
-    elif len(sys.argv) == 2:
+    if len(sys.argv) == 2:
       json_file = sys.argv[1]
+    elif args.experiment_file:
+      json_file = args.experiment_file
     else:
-      json_file = sys.argv[1]
-      print("Wasn't expecting more than one argument. Using the first as the json file")
+      json_file = 'run.json'
 
     with open(json_file) as f:
       experiment = json.load(f)
@@ -371,12 +372,28 @@ def main():
     if not os.path.exists(experiment['output_path']):
         os.makedirs(experiment['output_path'])
 
-    if experiment.get('cross_validation', None) and experiment['cross_validation']>1:
-        #rng = np.random.default_rng()
-        #seeds = rng.permutation(1000)[0:experiment['cross_validation']]
-        seeds = np.arange(experiment['cross_validation'])
-    else:
-        seeds = np.arange(1)
+
+    #Uses seeds in the range [start, end). Arguments passed in with high and low seed take precedence over cross_validation
+    start = 0
+    end = 1
+
+    if args.low_seed:
+      assert args.low_seed >= 0
+      start = args.low_seed
+    
+    if args.high_seed:
+      assert args.high_seed > start
+      end = args.high_seed
+
+    if experiment.get('cross_validation', None):
+      if args.high_seed and not args.low_seed:
+        start = end - experiment.get('cross_validation')
+      elif args.low_seed and not args.high_seed or (not args.low_seed and not args.high_seed): 
+        end = start+experiment.get('cross_validation')
+    
+    seeds = np.arange(start, end)
+
+    print(seeds)
 
     augmentations = []
     
@@ -397,6 +414,9 @@ def main():
     resume = False
     skip_hp_search = True
 
+
+    evaluations = []
+
     for model in os.listdir(experiment['path_to_model_files']):
         confusion_matrices = {}
         accuracies = {}
@@ -407,9 +427,8 @@ def main():
             model_params.name += "__augmented__union" 
 
         
-        seeds = np.arange(experiment['cross_validation'])
         for seed in seeds:
-            model_params.training_data_path = experiment['training_data_path']
+            model_params.training_data_path = experiment.get('training_data_path', './data/audio4analysis/')
             model_params.seed = seed
             model_params.augmentations = augmentations
             model_path = os.path.join(experiment['output_path'],model_params.name)
@@ -423,12 +442,26 @@ def main():
             output_path = f'./{model_params.name}/{seed}/'
 
             #Default path based off of emozionalmente test set that is generated
-            default_eval_csv_path = f'./{model_params.training_data_path}/train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}/'
+            default_eval_csv_path = os.path.join(model_params.training_data_path, f'train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}')
             
             #Train the given model
             run_model(model_params, model_path, output_path, experiment['hp_amount_of_training_data'], 
                       experiment['hp_num_trials'], resume, skip_hp_search)
             
+            #Don't evaluate but create the setup to later run evaluations
+            for dataset in experiment['datasets']:
+              eval_out_path = os.path.join('./outputs/', model_params.name, dataset['name'], str(seed))
+              eval_csv_path = dataset.get('eval_csv_path', default_eval_csv_path)
+              evaluations.append([model_params.name, dataset['name'], model_path, eval_csv_path, eval_out_path])
+    csv_name = experiment.get('experiment_name', str(int(time.time())))
+    with open(os.path.join('./outputs', f'{csv_name}.csv'), 'w') as f:
+      csv_file = csv.writer(f, delimiter='\t')
+      csv_file.writerow(['model_name', 'dataset_name', 'model_path', 'eval_csv_path', 'eval_out_path'])
+      for eval in evaluations:
+        csv_file.writerow(eval)
+
+'''
+#TODO extract this code elsewhere/move model analyses out of training pipeline in order to help parallelize runs
             #Evaluate the model that was just trained
             for dataset in experiment['datasets']:
                 if dataset['name'] not in confusion_matrices.keys():
@@ -457,6 +490,7 @@ def main():
         json_path = os.path.join('./outputs/', model_params.name, 'accuracies.json')
         with open(json_path, 'w') as f:
             f.write(json.dumps(accuracies))
+'''
 
 
 if __name__ == "__main__":
