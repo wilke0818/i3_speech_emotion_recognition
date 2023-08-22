@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 import os
 import sys
 from collections import OrderedDict
-import IPython.display as ipd
+
 from sklearn.model_selection import GroupShuffleSplit
 from datasets import load_dataset, load_metric
 from transformers import AutoConfig, AutoModel, AutoProcessor, Wav2Vec2Processor, PreTrainedModel, AutoFeatureExtractor
@@ -67,6 +67,8 @@ def run_eval(model_path, save_path, output_path):
     
     def test_data_prep(path):
         path = path['path']
+        file_name = path.split('/')[-1]
+        path = os.path.join('./data/audio4analysis_orig', file_name)
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
         speech = resampler(speech_array).squeeze().numpy()
@@ -156,4 +158,3 @@ def make_cm(label_names, y_true, y_pred, output_name):
 
 #An example call to this function, especially to run an evaluation on an already trained model
 #run_eval('./jonatasgrosman_wav2vec2_large_xlsr_53_italian/0/', './data/EMOVO/', './outputs/jonatasgrosman_wav2vec2_large_xlsr_53_italian/emovo/0/')
-
