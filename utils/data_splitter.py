@@ -49,7 +49,7 @@ def load_saved_dataset(save_path):
 
 def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=True, save=True, amount_of_data=1, data_path='./data/audio4analysis'):
     data = []
-    save_path = f'./{data_path}/train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}'
+    save_path = os.path.join('./', data_path, f"train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}")
     
     #Code is deterministic so don't redo computation if we don't need to
     if os.path.exists(save_path) and 'train.csv' in os.listdir(save_path):

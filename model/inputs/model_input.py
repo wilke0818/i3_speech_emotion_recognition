@@ -27,6 +27,8 @@ class ModelInputParameters:
     use_l2_reg: Optional[bool] = False
     weight_decay: Optional[float] = .01
     number_of_training_epochs: Optional[int] = 50
+    continue_model_training: Optional[bool] = False #if True, model output directory must have the last saved checkpoints of the training
+    skip_hp_search: Optional[bool] = True
 
     def fromJSON(path):
         with open(path) as f:
