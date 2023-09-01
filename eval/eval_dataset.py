@@ -218,3 +218,6 @@ def get_csv_info(csv_path):
           evals[row['model_name']][row['dataset_name']] = []
         evals[row['model_name']][row['dataset_name']].append((row['model_path'], row['eval_csv_path'], row['eval_out_path']))
   return evals
+
+if __name__ == "__main__":
+    sys.exit(main())
