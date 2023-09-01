@@ -49,10 +49,12 @@ from optuna.trial import TrialState
 import pytorch_lightning as pl
 from optuna.integration import PyTorchLightningPruningCallback
 
-from augmentations import *
-from data import generate_dataset,load_saved_dataset
-from model_input import ModelInputParameters
-from utils import *
+from augmentations.augmentations import *
+from utils.data_splitter import generate_dataset,load_saved_dataset
+from model.inputs.model_input import ModelInputParameters
+from experiment_input import ExperimentInputParameters
+from utils.model_classes import *
+
 import json
 import time
 
@@ -86,7 +88,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
         print(hp_search_eval_dataset)
 
     #generates train, validation, and test set from the emozionalmente dataset
-    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, model_params.training_data_path)
+    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, 1, model_params.training_data_path)
      
     label_list = train_dataset.unique(output_column)
     label_list.sort()  # Let's sort it for determinism
@@ -347,6 +349,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     feature_extractor.save_pretrained(model_path)
 
 def main():
+#TODO: reorganize and add an experiment_input class similar to model_input
     experiment = None
 
 
@@ -366,13 +369,15 @@ def main():
     else:
       json_file = 'run.json'
 
-    with open(json_file) as f:
-      experiment = json.load(f)
+    experiment = ExperimentInputParameters.fromJSON(json_file)
+    #with open(json_file) as f:
+    #  experiment = json.load(f)
 
-    if not os.path.exists(experiment['output_path']):
-        os.makedirs(experiment['output_path'])
+    #assert(experiment.get('experiment_name')) #Don't want to train and then fail cuz we forgot this. will remove when experiment_input class exists
+    if not os.path.exists(experiment.output_path):
+        os.makedirs(experiment.output_path)
 
-
+    
     #Uses seeds in the range [start, end). Arguments passed in with high and low seed take precedence over cross_validation
     start = 0
     end = 1
@@ -385,11 +390,11 @@ def main():
       assert args.high_seed > start
       end = args.high_seed
 
-    if experiment.get('cross_validation', None):
-      if args.high_seed and not args.low_seed:
-        start = end - experiment.get('cross_validation')
-      elif args.low_seed and not args.high_seed or (not args.low_seed and not args.high_seed): 
-        end = start+experiment.get('cross_validation')
+    if experiment.cross_validation:
+      if args.high_seed!=None and not args.low_seed!=None:
+        start = end - experiment.cross_validation
+      elif args.low_seed!=None and not args.high_seed!=None or (not args.low_seed!=None and not args.high_seed!=None): 
+        end = start+experiment.cross_validation
     
     seeds = np.arange(start, end)
 
@@ -397,8 +402,8 @@ def main():
 
     augmentations = []
     
-    if experiment.get('augmentations', None):
-        for (aug_desc, aug) in experiment['augmentations'].items():
+    if experiment.augmentations:
+        for (aug_desc, aug) in experiment.augmentations.items():
             aug_name = aug.pop("class")
             module_name = aug.pop("module")
             use_tensors = aug.pop("tensors", True)
@@ -409,34 +414,36 @@ def main():
 
     #Make sure you see all of the augmentations that were inteded
     print(augmentations)
-    
-    #TODO make these experiment variables
-    resume = False
-    skip_hp_search = True
-
 
     evaluations = []
 
-    for model in os.listdir(experiment['path_to_model_files']):
+    model_files = os.listdir(experiment.model_files) if os.path.isdir(experiment.model_files) else ['']
+    model_files = [os.path.join(experiment.model_files, model) for model in model_files]
+
+    for model in model_files:
         confusion_matrices = {}
         accuracies = {}
         
         
-        model_params = ModelInputParameters.fromJSON(os.path.join(experiment['path_to_model_files'],model))
+        model_params = ModelInputParameters.fromJSON(model)
         if len(augmentations) > 0:
             model_params.name += "__augmented__union" 
 
         
         for seed in seeds:
-            model_params.training_data_path = experiment.get('training_data_path', './data/audio4analysis/')
+            print(f'Running {model_params.name} seed {seed}')
+            model_params.training_data_path = experiment.training_data_path
             model_params.seed = seed
             model_params.augmentations = augmentations
-            model_path = os.path.join(experiment['output_path'],model_params.name)
+            model_path = os.path.join(experiment.output_path,model_params.name)
             model_path = os.path.join(model_path, str(seed))
 
+            skip_training = False
             #Make necessary paths for saving models if they don't exist
             if not os.path.exists(model_path):
                 os.makedirs(model_path)
+            elif os.path.exists(model_path) and len(os.listdir(model_path)) > 0:
+                skip_training = True
             if not os.path.exists(f'./{model_params.name}/{seed}/'):
                 os.makedirs(f'./{model_params.name}/{seed}/')
             output_path = f'./{model_params.name}/{seed}/'
@@ -444,17 +451,23 @@ def main():
             #Default path based off of emozionalmente test set that is generated
             default_eval_csv_path = os.path.join(model_params.training_data_path, f'train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}')
             
+            resume = model_params.continue_model_training
+            skip_hp_search = model_params.skip_hp_search
             #Train the given model
-            run_model(model_params, model_path, output_path, experiment['hp_amount_of_training_data'], 
-                      experiment['hp_num_trials'], resume, skip_hp_search)
+            if not skip_training:
+              run_model(model_params, model_path, output_path, experiment.hp_amount_of_training_data, 
+                        experiment.hp_num_trials, resume, skip_hp_search)
             
             #Don't evaluate but create the setup to later run evaluations
-            for dataset in experiment['datasets']:
+            for dataset in experiment.datasets:
               eval_out_path = os.path.join('./outputs/', model_params.name, dataset['name'], str(seed))
               eval_csv_path = dataset.get('eval_csv_path', default_eval_csv_path)
               evaluations.append([model_params.name, dataset['name'], model_path, eval_csv_path, eval_out_path])
-    csv_name = experiment.get('experiment_name', str(int(time.time())))
-    with open(os.path.join('./outputs', f'{csv_name}.csv'), 'w') as f:
+    output_experiment_path = os.path.join('./outputs/', experiment.experiment_name)
+
+    #to support parallelism better we redefine the naming scheme to specifically use epoch time; additionally experiment name will now be required
+    csv_name = str(int(time.time()))
+    with open(os.path.join(output_experiment_path, f'{csv_name}.csv'), 'w') as f:
       csv_file = csv.writer(f, delimiter='\t')
       csv_file.writerow(['model_name', 'dataset_name', 'model_path', 'eval_csv_path', 'eval_out_path'])
       for eval in evaluations:

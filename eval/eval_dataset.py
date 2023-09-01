@@ -49,10 +49,10 @@ from transformers import (
     is_apex_available,
     )
 from sklearn.metrics import classification_report
-from utils import *
+from utils.model_classes import *
 import json
 from audiomentations import LoudnessNormalization, Compose, AddGaussianNoise
-
+import csv
 
 def run_eval(model_path, save_path, output_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -159,3 +159,62 @@ def make_cm(label_names, y_true, y_pred, output_name):
 #An example call to this function, especially to run an evaluation on an already trained model
 #run_eval('./anon_synt/', './data/audio4analysis_norm_synt/train_test_validation/0/speaker_ind_True_100_80/', './outputs/anon_synt/emozionalmente_copy/')
 
+def main():
+  confusion_matrices = {}
+  accuracies = {}
+  parser=argparse.ArgumentParser()
+
+  parser.add_argument("--eval_path", help="Runs the evaluation code using CSV path given. If directory, uses all CSVs in the path")
+
+  args=parser.parse_args()
+  evals = get_csv_info(args.eval_path)
+
+  for model in evals.keys():
+    for dataset in evals[model].keys():
+      for (model_path, eval_csv_path, eval_out_path) in evals[model][dataset]:
+  
+        if dataset not in confusion_matrices.keys():
+          confusion_matrices[dataset] = {'overall': []}
+          accuracies[dataset] = []
+
+        if not os.path.exists(eval_out_path):
+          os.makedirs(eval_out_path)
+        cm, accuracy, gendered_cms = run_eval(model_path, eval_csv_path, eval_out_path)
+
+        confusion_matrices[dataset]['overall'].append(cm)
+        for gender, gender_cm in gendered_cms.items():
+          if gender not in confusion_matrices[dataset].keys():
+            confusion_matrices[dataset][gender] = []
+            confusion_matrices[dataset][gender].append(gender_cm)
+        accuracies[dataset].append(accuracy)
+      
+    #For a model architecture/settings in this experiment, create a single, averaged confusion matrix of all runs of it
+    for dataset in confusion_matrices.keys():
+      df_concat=pd.concat(confusion_matrices[dataset],axis=0)
+      data_mean=df_concat.groupby(level=0).mean()
+      eval_out_path = os.path.join('./outputs/', model, dataset, 'confusion_matrix.csv')
+      data_mean.to_csv(eval_out_path)
+      accuracies[dataset] = np.mean(accuracies[dataset])
+    json_path = os.path.join('./outputs/', model, 'accuracies.json')
+    with open(json_path, 'w') as f:
+      f.write(json.dumps(accuracies))
+
+def get_csv_info(csv_path):
+  csvs = []
+  if os.path.isdir(csv_path):
+    csvs = [os.path.join(csv_path, csv_f) for csv_f in os.listdir(csv_path) if csv_f[-4:] == '.csv']
+  else:
+    csvs = [csv_path]
+
+  evals = {}
+
+  for csv_f in csvs:
+    with open(csv_f, 'r') as csvfile:
+      reader = csv.DictReader(csvfile, delimiter='\t')
+      for row in reader:
+        if row['model_name'] not in evals:
+          evals[row['model_name']] = {}
+        if row['dataset_name'] not in evals[row['model_name']]:
+          evals[row['model_name']][row['dataset_name']] = []
+        evals[row['model_name']][row['dataset_name']].append((row['model_path'], row['eval_csv_path'], row['eval_out_path']))
+  return evals

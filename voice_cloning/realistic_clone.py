@@ -17,7 +17,7 @@ parser.add_argument("--gender", help="Gender to use")
 args=parser.parse_args()
 
 dataset = load_dataset("mozilla-foundation/common_voice_13_0", "it")
-setup = True
+setup = False
 if setup:
   data = concatenate_datasets([dataset['train'],dataset['validation']])
   sentences = data.filter(lambda x: len(x['sentence'].split(' ')) > 25)
