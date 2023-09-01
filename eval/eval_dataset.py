@@ -53,6 +53,7 @@ from utils.model_classes import *
 import json
 from audiomentations import LoudnessNormalization, Compose, AddGaussianNoise
 import csv
+import argparse
 
 def run_eval(model_path, save_path, output_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -69,6 +70,8 @@ def run_eval(model_path, save_path, output_path):
         path = path['path']
         file_name = path.split('/')[-1]
         path = os.path.join('./data/audio4analysis_orig', file_name)
+        print(path)
+        print(os.path.abspath(path))
         speech_array, sampling_rate = torchaudio.load(path)
         resampler = torchaudio.transforms.Resample(sampling_rate, target_sampling_rate)
         speech = resampler(speech_array).squeeze().numpy()
