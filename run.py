@@ -428,6 +428,7 @@ def main():
 
         
         for seed in seeds:
+            print(f'Running {model_params.name} seed {seed}')
             model_params.training_data_path = experiment.get('training_data_path', './data/audio4analysis/')
             model_params.seed = seed
             model_params.augmentations = augmentations
@@ -437,6 +438,8 @@ def main():
             #Make necessary paths for saving models if they don't exist
             if not os.path.exists(model_path):
                 os.makedirs(model_path)
+            elif os.path.exists(model_path) and len(os.listdir(model_path)) > 0:
+                continue
             if not os.path.exists(f'./{model_params.name}/{seed}/'):
                 os.makedirs(f'./{model_params.name}/{seed}/')
             output_path = f'./{model_params.name}/{seed}/'

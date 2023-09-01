@@ -1,0 +1,17 @@
+{
+        "path_to_model_files": "./model/inputs/21082023",
+        "output_path": "./model/final/21082023",
+        "hp_amount_of_training_data": 0.3,
+        "hp_num_trials": 5,
+        "cross_validation": 5,
+        "datasets": [
+                {
+                        "name": "emovo",
+                        "eval_csv_path": "./data/emovo/"
+                },
+                {
+                        "name": "emozionalmente"
+                }
+        ],
+	"training_data_path": "./data/audio4analysis_norm_synt/"
+}
