@@ -29,11 +29,12 @@ for model in models:
   if not os.path.isdir(model_path):
     continue
   
-  results[model] = {}
+  results[model] = {'eval_loss': [], 'eval_accuracy': [], 'train_loss': [], 'epochs': []}
   for model_run in os.listdir(model_path): 
     model_run_path = os.path.join(model_path,model_run)
     if os.path.isdir(model_run_path):
-      results[model][model_run] = {'eval_loss': [], 'eval_accuracy': [], 'train_loss': [], 'epochs': []}
+      #convert model_run to just be a sublist that way numpy functions can be applied to an axis
+      model_run_results = {'eval_loss': [], 'eval_accuracy': [], 'train_loss': [], 'epochs': []}
       
       sub_path = os.path.join(model_run_path, 'runs')
       
@@ -64,17 +65,20 @@ for model in models:
         for e in summary_iterator(other_log):
           for v in e.summary.value:
             if v.tag == 'train/loss':
-              results[model][model_run]['train_loss'].append(v.simple_value)
+              model_run_results['train_loss'].append(v.simple_value)
             elif v.tag=='eval/loss':
-              results[model][model_run]['eval_loss'].append(v.simple_value)
+              model_run_results['eval_loss'].append(v.simple_value)
             elif v.tag=='eval/accuracy':
-              results[model][model_run]['eval_accuracy'].append(v.simple_value)
+              model_run_results['eval_accuracy'].append(v.simple_value)
             elif v.tag == 'train/epoch':
               #Weirdly every evaluation+training log in this file generates the number of epochs run twice, so we only want to count each once
-              if len(results[model][model_run]['epochs'])==0 or results[model][model_run]['epochs'][-1] != v.simple_value:
-                results[model][model_run]['epochs'].append(v.simple_value)
+              if len(model_run_results['epochs'])==0 or model_run_results['epochs'][-1] != v.simple_value:
+                model_run_results['epochs'].append(v.simple_value)
+        for metric in model_run_results:
+          results[model][metric].append(model_run_results[metric])
 
-print(results)
+
+#print(results)
 fig, (ax1, ax2) = plt.subplots(1,2, figsize=(14,10), sharex=True)
 
 '''
@@ -111,14 +115,23 @@ for model in results:
   
   ax2.plot(results[model][best_model_map[model]['eval_loss']]['epochs'],results[model][best_model_map[model]['eval_loss']]['train_loss'], color=last_line[0].get_color(), linestyle='dashed')
 '''
+
+avg_results = {}
+for model in results:
+  avg_results[model] = {}
+  for metric in model[results]:
+    avg_results[model][metric] = np.average(results[model][metric], axis=1)
+  
+
+
 for model in results:
   #TODO clean up this code
-  ax1.plot(results[model]['0']['epochs'],results[model]['0']['eval_accuracy'], label=model)
+  ax1.plot(avg_results[model]['epochs'],avg_results[model]['eval_accuracy'], label=model)
 
   #For loss, we will also plot the training loss as a dashed line of the same color
-  last_line = ax2.plot(results[model]['0']['epochs'],results[model]['0']['eval_loss'])
+  last_line = ax2.plot(avg_results[model]['epochs'],avg_results[model]['eval_loss'])
   
-  ax2.plot(results[model]['0']['epochs'],results[model]['0']['train_loss'], color=last_line[0].get_color(), linestyle='dashed')
+  ax2.plot(avg_results[model]['epochs'],avg_results[model]['train_loss'], color=last_line[0].get_color(), linestyle='dashed')
 ax1.set(title='Eval Accuracy')
 ax1.set(ylabel="Percentage")
 ax2.set(title='Loss')
