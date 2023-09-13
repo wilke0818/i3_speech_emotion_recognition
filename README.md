@@ -12,7 +12,7 @@ Also, we found that model architectures, language-based pre-fine-tuning, and tes
 
 ## Repository Structure
 This repository is organized as follows: 
-- ```...```: ... <TODO>
+- ```...```: ... <TODO: please mention here where are the scripts and where are the supplementary resources (e.g., confusion matrices)>
 - ```requirements.txt```: A file containing the required Python dependencies for running the code in the notebook.
 - ```LICENSE```: The license file governing the use and distribution of the code and resources in this repository.
 - ```README.md```: The readme file you are currently reading.
