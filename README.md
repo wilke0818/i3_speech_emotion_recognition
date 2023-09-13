@@ -1,7 +1,7 @@
 
 # Exploring the Impact of Model Architectures, Language-based Pre-Fine-Tuning, and Test Datasets on Speech Emotion Recognition
 
-This GitHub repository contains code and resources for the paper titled "Exploring the Impact of Model Architectures, Language-based Pre-Fine-Tuning, and Test Datasets on Speech Emotion Recognition", presented at ICASSP 2024. In this project, we explore the use of self-supervised models for speech emotion recognition. 
+This GitHub repository contains code and resources for the paper titled "Exploring the Impact of Model Architectures, Language-based Pre-Fine-Tuning, and Test Datasets on Speech Emotion Recognition", presented at ICASSP 2024. In this project, we explore the use of self-supervised models for speech emotion recognition, evaluating the results through statistical analyses. 
 
 
 ## Paper's abstract
