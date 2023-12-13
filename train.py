@@ -54,6 +54,7 @@ from utils.data_splitter import generate_dataset,load_saved_dataset
 from model.inputs.model_input import ModelInputParameters
 from experiment_input import ExperimentInputParameters
 from utils.model_classes import *
+from utils.callbacks import *
 
 import json
 import time
@@ -77,7 +78,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     if not resume_from_prev and not skip_hp_search:
         #Generate data for hyperparameter search
         hp_search_train_dataset, hp_search_eval_dataset, hp_search_test_dataset = generate_dataset(
-            model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data, model_params.training_data_path)
+            model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, hp_amount_of_data, model_params.training_data_csv)
     
        #Since test set is not used for hp search, combine eval and train back together and use the original test set for eval: gives the desired train/test split with the amount of data specified
 
@@ -90,13 +91,13 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     #generates train, validation, and test set from the emozionalmente dataset
 
     #train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, data_path=model_params.training_data_path)
-    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, 1, model_params.training_data_path)
+    train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, 1, model_params.training_data_csv)
 
-     
+    print(train_dataset)     
     label_list = train_dataset.unique(output_column)
     label_list.sort()  # Let's sort it for determinism
     num_labels = len(label_list)
-    
+    print(label_list) 
     config = AutoConfig.from_pretrained(
         model_name_or_path,
         num_labels=num_labels,
@@ -130,7 +131,11 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     
     def preprocess_function(examples):
         #note examples is in batches from the datasets
-        speech_list = [speech_file_to_array_fn(path) for path in examples[input_column]]
+        #print(examples)
+        #speech_list = [[speech_file_to_array_fn(example[input_column]),example['gender']]  for example in examples]
+        speech_list = [speech_file_to_array_fn(example)  for example in examples[input_column]]
+        gender_list = [gender for gender in examples['gender']]
+        #speech_list = [[speech_list[i],gender_list[i]] for i in range(len(gender_list))]
         target_list = [label_to_id(label, label_list) for label in examples[output_column]]
     
         result = feature_extractor(speech_list, sampling_rate=target_sampling_rate)
@@ -337,7 +342,7 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
  
     num_evals = round(len(train_dataset)/per_device_train_batch_size/4*epochs_number) #Not currently used
 
-    quit_after_evals = 25 #Quit after 50 evals of not seeing the threshold improvement (50 evals = 500 steps; dependent on batch size, and training dataset size) #round(num_evals*0.05) #round(num_evals*.1)
+    quit_after_evals = 15 #Quit after 50 evals of not seeing the threshold improvement (50 evals = 500 steps; dependent on batch size, and training dataset size) #round(num_evals*0.05) #round(num_evals*.1)
     print('Quitting after:', quit_after_evals)
     early_stopping_threshold = 0.01
     trainer.add_callback(EarlyStoppingCallback(quit_after_evals, early_stopping_threshold))
@@ -352,7 +357,6 @@ def run_model(model_params, model_path, output_path, hp_amount_of_data, hp_num_t
     feature_extractor.save_pretrained(model_path)
 
 def main():
-#TODO: reorganize and add an experiment_input class similar to model_input
     experiment = None
 
 
@@ -420,9 +424,9 @@ def main():
 
     evaluations = []
 
-    model_files = os.listdir(experiment.model_files) if os.path.isdir(experiment.model_files) else ['']
-    model_files = [os.path.join(experiment.model_files, model) for model in model_files]
-
+    model_files = os.listdir(experiment.model_files) if os.path.isdir(experiment.model_files) else []
+    model_files = [os.path.join(experiment.model_files, model) for model in model_files] if model_files else [experiment.model_files]
+    print(model_files)
     for model in model_files:
         confusion_matrices = {}
         accuracies = {}
@@ -438,12 +442,12 @@ def main():
 
             #model_params.training_data_path = experiment.get('training_data_path', './data/audio4analysis/')
 
-            model_params.training_data_path = experiment.training_data_path
+            model_params.training_data_csv = experiment.training_dataset['data_csv']
             model_params.seed = seed
             model_params.augmentations = augmentations
-            model_path = os.path.join(experiment.output_path,model_params.name)
+            model_path = os.path.join(experiment.output_path,experiment.experiment_name,model_params.name)
+            print(model_path)
             model_path = os.path.join(model_path, str(seed))
-
             skip_training = False
             #Make necessary paths for saving models if they don't exist
             if not os.path.exists(model_path):
@@ -455,8 +459,9 @@ def main():
                 os.makedirs(f'./{model_params.name}/{seed}/')
             output_path = f'./{model_params.name}/{seed}/'
 
+            training_data_path = os.path.split(model_params.training_data_csv)[0]
             #Default path based off of emozionalmente test set that is generated
-            default_eval_csv_path = os.path.join(model_params.training_data_path, f'train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}')
+            default_eval_csv_path = os.path.join(training_data_path, f'train_test_validation/{seed}/speaker_ind_{model_params.speaker_independent_scenario}_100_{int(100*model_params.train_test_split)}')
             
             resume = model_params.continue_model_training
             skip_hp_search = model_params.skip_hp_search
@@ -464,17 +469,23 @@ def main():
             if not skip_training:
               run_model(model_params, model_path, output_path, experiment.hp_amount_of_training_data, 
                         experiment.hp_num_trials, resume, skip_hp_search)
-            
+           
+            #print(default_eval_csv_path)
+            #Changed such that training datasets is no longer in datasets
+            eval_out_path = os.path.join(experiment.experiment_results_output_path, model_params.name, experiment.training_dataset['name'], str(seed))
+            eval_csv_path = default_eval_csv_path
+            evaluations.append([model_params.name, experiment.training_dataset['name'], model_path, eval_csv_path, eval_out_path])
             #Don't evaluate but create the setup to later run evaluations
             for dataset in experiment.datasets:
-              eval_out_path = os.path.join('./outputs/', model_params.name, dataset['name'], str(seed))
-              eval_csv_path = dataset.get('eval_csv_path', default_eval_csv_path)
+              eval_out_path = os.path.join(experiment.experiment_results_output_path, model_params.name, dataset['name'], str(seed))
+              eval_csv_path = dataset['eval_csv_path']
               evaluations.append([model_params.name, dataset['name'], model_path, eval_csv_path, eval_out_path])
-    output_experiment_path = os.path.join('./outputs/', experiment.experiment_name)
-
+    output_experiment_path = os.path.join(experiment.experiment_results_output_path, experiment.experiment_name)
+    if not os.path.exists(output_experiment_path):
+      os.makedirs(output_experiment_path)
     #to support parallelism better we redefine the naming scheme to specifically use epoch time; additionally experiment name will now be required
     csv_name = str(int(time.time()))
-    with open(os.path.join(output_experiment_path, f'{csv_name}.csv'), 'w') as f:
+    with open(os.path.join(output_experiment_path, f'{csv_name}.csv'), 'w+') as f:
       csv_file = csv.writer(f, delimiter='\t')
       csv_file.writerow(['model_name', 'dataset_name', 'model_path', 'eval_csv_path', 'eval_out_path'])
       for eval in evaluations:

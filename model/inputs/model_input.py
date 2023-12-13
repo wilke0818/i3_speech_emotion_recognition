@@ -17,7 +17,7 @@ class ModelInputParameters:
     eval_steps: Optional[int] = 10
     logging_steps: Optional[int] = 10
     input_column: Optional[str] = 'path'
-    output_column: Optional[str] = 'emotion'
+    output_column: Optional[str] = 'class_id'
     is_regression: Optional[bool] = False
     train_test_split: Optional[float] = .8
     seed: Optional[int] = 0

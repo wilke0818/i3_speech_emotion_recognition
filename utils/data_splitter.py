@@ -2,13 +2,13 @@ import os
 import sys
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.model_selection import train_test_split
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import torchaudio
-
+import csv
 
 def my_split(df, data, state, training_amount):
     gss = GroupShuffleSplit(n_splits=1, train_size=training_amount, random_state=state)
@@ -17,11 +17,14 @@ def my_split(df, data, state, training_amount):
     my_real_train_idx = []
     my_real_test_idx = []
 
-    for label in df['emotion'].unique():
-        df_data_by_emotion = data[data['emotion'] == label]
+    for label in df['class_id'].unique():
+        df_data_by_emotion = data[data['class_id'] == label]
         X = df_data_by_emotion
-        y = df_data_by_emotion["emotion"]
+        y = df_data_by_emotion["class_id"]
         groups = df_data_by_emotion['actor']
+        print('X',X)
+        print('y',y)
+        print('groups',groups)
 
         for train_idx, test_idx in gss.split(X, y, groups):
             my_real_train_idx = np.concatenate([my_real_train_idx, df_data_by_emotion.iloc[train_idx].index])
@@ -47,42 +50,42 @@ def load_saved_dataset(save_path):
 
 
 
-def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=True, save=True, amount_of_data=1, data_path='./data/audio4analysis'):
+def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=True, save=True, amount_of_data=1, data_csv='./data/audio4analysis/metadata.csv'):
     data = []
-    save_path = os.path.join('./', data_path, f"train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}")
+    data_path = os.path.split(data_csv)
+    data_path = os.path.join(data_path[0], data_path[1][:-4])
+    save_path = os.path.join(data_path, f"train_test_validation/{seed}/speaker_ind_{speaker_independent_scenario}_{int(100*amount_of_data)}_{int(100*training_split)}")
     
     #Code is deterministic so don't redo computation if we don't need to
     if os.path.exists(save_path) and 'train.csv' in os.listdir(save_path):
-        return load_saved_dataset(save_path)
-
-
-    for path in tqdm(Path(data_path).glob("**/*.wav")):
-        name = str(path).split('/')[-1].split('.')[0]
-        original_name = str(name).split('____')[-1]
-        label = str(name).split('____')[-2]
-        actor = str(name).split('____')[-3]
-        gender = str(name).split('____')[-4]
-    
+      return load_saved_dataset(save_path)
+    if not os.path.exists(save_path):
+      os.makedirs(save_path)
+    with open(data_csv, 'r') as f:
+      reader = csv.DictReader(f)
+      for row in reader:
+        actor = row['actor']
+        class_id = row['class_id']
+        path = row['path']
+        gender = row['gender']
+        #TODO consider adding age
         try:
-            s = torchaudio.load(path)
-            data.append({
-                "original_name": original_name,
-                "name": name,
+          s = torchaudio.load(path)
+          data.append({
                 "path": path,
-                "emotion": label,
+                "class_id": class_id,
                 "actor": actor,
                 "gender": gender
-            })
+          })
         except Exception as e:
             # Check if there are some broken files
             print(str(path), e)
-    
     df = pd.DataFrame(data)
-    df.groupby("emotion").count()[["path"]]
-
+    df.groupby("class_id").count()[["path"]]
+    print(df)
     if speaker_independent_scenario == True:
-        males = df[df['gender'] == "male"]
-        females = df[df['gender'] == "female"]
+        males = df[df['gender'].str.lower() == "male"]
+        females = df[df['gender'].str.lower() == "female"]
 
         #Allow for getting a given amount of data rather than just a train/test split
         if amount_of_data != 1 and amount_of_data != 0:
@@ -115,8 +118,8 @@ def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=Tru
         test_df = pd.concat([males_test_df,females_test_df])
         val_df = pd.concat([males_val_df,females_val_df])
     else: #TODO implement data splits; right now this code only allows for train/test splits
-        train_df, test_df = train_test_split(df, test_size=(1-training_amount), random_state=seed, stratify=df["emotion"])
-        train_df, val_df = train_test_split(train_df, test_size=(1-training_amount), random_state=seed, stratify=train_df["emotion"])
+        train_df, test_df = train_test_split(df, test_size=(1-training_amount), random_state=seed, stratify=df["class_id"])
+        train_df, val_df = train_test_split(train_df, test_size=(1-training_amount), random_state=seed, stratify=train_df["class_id"])
 
 
 
@@ -125,11 +128,11 @@ def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=Tru
     val_df = val_df.reset_index(drop=True)
 
     if not save: #We typically want to save the data, but if not, just return the data
-        return from_pandas(train_df), from_pandas(val_df), from_pandas(test_df)
+        return Dataset.from_pandas(train_df), Dataset.from_pandas(val_df), Dataset.from_pandas(test_df)
 
-    os.makedirs(save_path)
 
     train_df.to_csv(f"{save_path}/train.csv", sep="\t", encoding="utf-8", index=False)
     test_df.to_csv(f"{save_path}/test.csv", sep="\t", encoding="utf-8", index=False)
     val_df.to_csv(f"{save_path}/val.csv", sep="\t", encoding="utf-8", index=False)
     return load_saved_dataset(save_path)
+

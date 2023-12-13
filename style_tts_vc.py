@@ -235,11 +235,11 @@ setup = 'long_sentences.csv' not in os.listdir('./voice_cloning/')
 print(setup)
 
 try:
-  dataset = load_dataset("mozilla-foundation/common_voice_13_0", "it")
+  dataset = load_dataset("mozilla-foundation/common_voice_13_0", "en")
 except OSError as e:
   print(e)
   get_ipython().system('huggingface-cli login')
-  dataset = load_dataset("mozilla-foundation/common_voice_13_0", "it")
+  dataset = load_dataset("mozilla-foundation/common_voice_13_0", "en")
 if setup:
 
   data = concatenate_datasets([dataset['train'],dataset['validation']])
@@ -260,19 +260,19 @@ all_data = concatenate_datasets([male_data, female_data])
 # In[9]:
 
 
-output_path = './data/audio4analysis_vc_real'
-input_path = './data/audio4analysis'
-gender = None
+output_path = '/om2/user/wilke18/CREMA-D/AudioWAV_multiplied/'#'./data/audio4analysis_vc_real'
+input_path = '/om2/user/wilke18/CREMA-D/AudioWAV_gender/male'#'./data/audio4analysis'
+gender = 'male'
 
 
 # In[10]:
 
 
 if gender == 'male' or gender == 'm':
-  speaker_ind = random.randrange(len(male_data))
+  speaker_ind = 4#random.randrange(len(male_data))
   speaker = male_data[speaker_ind]
 elif gender == 'female' or gender =='f':
-  speaker_ind = random.randrange(len(female_data))
+  speaker_ind = 4#random.randrange(len(female_data))
   speaker = female_data[speaker_ind]
 else:
   speaker_ind = random.randrange(len(all_data))
@@ -398,6 +398,10 @@ def create_realistic_voice_clones(input_file, output_file):
   source = preprocess(audio).to(device)
   converted = conversion(source, input_file, reference_embeddings)
   # print(converted)
+  resampler = torchaudio.transforms.Resample(target_sr, source_sr)
+  out_audio = resampler(torch.from_numpy(converted[input_file]).unsqueeze(0))
+  split = os.path.split(output_file)
+  output_file = os.path.join(split[0], f"{gender}_{speaker_ind}_{split[1]}")
   torchaudio.save(output_file, torch.from_numpy(converted[input_file]).unsqueeze(0), target_sr)
 
 apply_func_to_all_wavs(input_path, output_path, create_realistic_voice_clones)

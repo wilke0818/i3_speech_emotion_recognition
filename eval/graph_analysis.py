@@ -56,9 +56,8 @@ for model in models:
         sub_path = os.listdir(sub_path)[0]
       else: #if there were no logs for this seed, just continue onward; this should never be the case
         continue
-      print(sub_path)
       if os.path.isdir(sub_path):
-        
+        print(sub_path)
         #there should be 2 log files: a tensorflow log file and a logs.txt file; the tensorflow file in fact contains all the information we want 
         other_log = [os.path.join(sub_path, f) for f in os.listdir(sub_path) if f!='logs.txt'][0]
 
@@ -115,12 +114,13 @@ for model in results:
   
   ax2.plot(results[model][best_model_map[model]['eval_loss']]['epochs'],results[model][best_model_map[model]['eval_loss']]['train_loss'], color=last_line[0].get_color(), linestyle='dashed')
 '''
-
+#print(results)
 avg_results = {}
 for model in results:
   avg_results[model] = {}
-  for metric in model[results]:
-    avg_results[model][metric] = np.average(results[model][metric], axis=1)
+  for metric in results[model]:
+    #print(len(results[model][metric][0]), len(results[model][metric][1]), len(results[model][metric][2]), len(results[model][metric][3]))
+    avg_results[model][metric] = results[model][metric][0]
   
 
 

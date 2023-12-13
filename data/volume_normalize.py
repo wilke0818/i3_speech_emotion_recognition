@@ -2,9 +2,12 @@ from audiomentations import LoudnessNormalization, Compose
 import argparse, sys
 import torchaudio
 import torch
-import os
+import os, sys
 from tqdm import tqdm
-from utils import apply_func_to_all_wavs
+
+sys.path.insert(0, 'utils')
+
+from utility_funcs import apply_func_to_all_wavs
 
 parser=argparse.ArgumentParser()
 

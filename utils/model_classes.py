@@ -60,6 +60,7 @@ import json
 
 from speechbrain.lobes.models.ECAPA_TDNN import ECAPA_TDNN
 
+
 @dataclass
 class SpeechClassifierOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
@@ -105,7 +106,6 @@ class ModelForSpeechClassification(PreTrainedModel):
         
         self.model = AutoModel.from_pretrained(config._name_or_path)
         self.classifier = ClassificationHead(config, use_dropout, dropout_rate, use_batch_norm, weight_decay)
-
         self.embedding = ECAPA_TDNN(config.hidden_size, lin_neurons=config.hidden_size) 
         self.init_weights()
 
@@ -151,7 +151,9 @@ class ModelForSpeechClassification(PreTrainedModel):
             return_dict=return_dict,
         )
         hidden_states = outputs[0]
+        
         hidden_states = self.merged_strategy(hidden_states, mode=self.pooling_mode)
+        hidden_states = hidden_states
         logits = self.classifier(hidden_states)
 
         loss = None
@@ -201,7 +203,7 @@ class DataCollatorCTCWithPadding:
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
         input_features = [{"input_values": feature["input_values"]} for feature in features]
         label_features = [feature["labels"] for feature in features]
-
+        
         d_type = torch.long if isinstance(label_features[0], int) else torch.float
 
         batch = self.processor.pad(
@@ -224,7 +226,6 @@ class CTCTrainer(Trainer):
     def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
         model.train()
         inputs = self._prepare_inputs(inputs)
-
         loss = self.compute_loss(model, inputs)
 
         if self.args.gradient_accumulation_steps > 1:

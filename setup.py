@@ -87,15 +87,17 @@ def process_emovo_data(emovo_dir):
                   })
   df = pd.DataFrame(data)
 
-  df.to_csv(f"{emovo_dir}/test.csv", sep="\t", encoding="utf-8", index=False)
+  df.to_csv(f"{emovo_dir}/metadata.csv", sep="\t", encoding="utf-8", index=False)
 
 def generate_data_files():
     users_df = pd.read_csv("data/metadata/users.csv")
     samples_df = pd.read_csv("data/metadata/samples.csv")
 
-    samples_df['actor_gender'] = None
-    samples_df['actor_age'] = None
+    samples_df['gender'] = None
+    samples_df['age'] = None
     samples_df['new_file_name'] = None
+    samples_df['path'] = None
+    samples_df['class_id'] = None
     
     for index, sample in samples_df.iterrows():
       actor = sample['actor']
@@ -104,11 +106,13 @@ def generate_data_files():
       age = users_df[users_df['username'] == actor]['age'].values[0]
       gender = users_df[users_df['username'] == actor]['gender'].values[0]
       new_file_name = gender + '____' + actor + '____' + emotion_expressed + '____' + file_name
-      samples_df.iloc[index, samples_df.columns.get_loc('actor_age')] = age
-      samples_df.iloc[index, samples_df.columns.get_loc('actor_gender')] = gender
+      samples_df.iloc[index, samples_df.columns.get_loc('age')] = age
+      samples_df.iloc[index, samples_df.columns.get_loc('gender')] = gender
       samples_df.iloc[index, samples_df.columns.get_loc('new_file_name')] = new_file_name
-      shutil.copyfile(f'data/audio/{file_name}', f'data/audio4analysis/{new_file_name}')
-
+      #shutil.copyfile(f'data/audio/{file_name}', f'data/audio4analysis/{new_file_name}')
+      samples_df.iloc[index, samples_df.columns.get_loc('path')] = f'data/audio4analysis/{new_file_name}'
+      samples_df.iloc[index, samples_df.columns.get_loc('class_id')] = emotion_expressed
+    samples_df.to_csv('data/audio4analysis/metadata.csv', sep="\t", encoding="utf-8", index=False)
 
 def main():
   parser=argparse.ArgumentParser()
