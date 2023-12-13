@@ -12,10 +12,13 @@ Also, we found that model architectures, language-based pre-fine-tuning, and tes
 
 ## Repository Structure
 This repository is organized as follows: 
-- ```...```: ... <TODO: @jordan: please mention here where are the scripts and where are the supplementary resources (e.g., confusion matrices)>
 - ```requirements.txt```: A file containing the required Python dependencies for running the code in the notebook.
 - ```LICENSE```: The license file governing the use and distribution of the code and resources in this repository.
 - ```README.md```: The readme file you are currently reading.
+- ```...```: ... 
+
+#### TO DO:
+- [ ] ([Jordan](https://github.com/wilke0818)) Mention here where are the scripts and where are the supplementary resources (e.g., confusion matrices)
  
 ## Getting Started
 ### (Optional) Creating a virtual environment
@@ -39,7 +42,8 @@ pip install -r requirements.txt
 ```
 Note that you might already have torch-audiomentations installed for augmenting the audio data. In our code we use AddColoredNoise which the current code of torch-audiomentations on PyPi does not fully match their Github. For this reason we reccomend uninstalling it and using the code directly from their Github which is what our requiments.txt file uses.
 
-<TODO: @jordan: SHOULD WE EXPLAIN WHAT .PY FILE THEY SHOULD RUN?>
+#### TO DO:
+- [ ] ([Jordan](https://github.com/wilke0818)) Explain in detail what .py files should be run to reproduce the ICASSP pipeline. 
 
 ## Citation
 Hopefully, a paper will be published soon :)
