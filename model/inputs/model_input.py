@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from typing import Optional
+from typing import Optional, Union, List
 from dataclasses import dataclass
 from collections import namedtuple
 import json
@@ -14,10 +14,8 @@ class ModelInputParameters:
     pooling_mode: Optional[str] = 'mean'
     model_output_dir: Optional[str] = './wav2vec2-xlsr'
     speaker_independent_scenario: Optional[bool] = True
-    eval_steps: Optional[int] = 10
-    logging_steps: Optional[int] = 10
     input_column: Optional[str] = 'path'
-    output_column: Optional[str] = 'class_id'
+    output_column: Optional[Union[str, List[str]]] = 'class_id'
     is_regression: Optional[bool] = False
     train_test_split: Optional[float] = .8
     seed: Optional[int] = 0
@@ -26,9 +24,12 @@ class ModelInputParameters:
     dropout_rate: Optional[float] = .5
     use_l2_reg: Optional[bool] = False
     weight_decay: Optional[float] = .01
+    use_weight_encoder_layers: Optional[bool] = False
+    pool_position: Optional[str] = 'after'
     number_of_training_epochs: Optional[int] = 50
     continue_model_training: Optional[bool] = False #if True, model output directory must have the last saved checkpoints of the training
     skip_hp_search: Optional[bool] = True
+    use_relu: Optional[bool] = True
 
     def fromJSON(path):
         with open(path) as f:

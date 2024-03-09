@@ -58,8 +58,74 @@ import shutil
 import os
 import json
 
-from speechbrain.lobes.models.ECAPA_TDNN import ECAPA_TDNN
+from speechbrain.lobes.models.ECAPA_TDNN import ECAPA_TDNN, AttentiveStatisticsPooling, Conv1d, BatchNorm1d
 
+
+# Code modeled after ECAPA_TDNN using onlt AttentiveStatisticsPooling and later:
+# https://speechbrain.readthedocs.io/en/latest/_modules/speechbrain/lobes/models/ECAPA_TDNN.html#ECAPA_TDNN
+class AttStats(torch.nn.Module):
+  def __init__(
+    self,
+    input_size,
+    lin_neurons=192,
+    attention_channels=128,
+    global_context=True
+  ):
+    super().__init__()
+    # Attentive Statistical Pooling
+    self.asp = AttentiveStatisticsPooling(
+      input_size,
+      attention_channels=attention_channels,
+      global_context=global_context,
+    )
+    self.asp_bn = BatchNorm1d(input_size=input_size * 2)
+
+    # Final linear transformation
+    self.fc = Conv1d(
+      in_channels=input_size * 2,
+      out_channels=lin_neurons,
+      kernel_size=1,
+    )
+
+  def forward(self, x, lengths=None):
+      """Returns the embedding vector.
+
+       Arguments
+      ---------
+      x : torch.Tensor
+          Tensor of shape (batch, time, channel).
+      """
+      # Minimize transpose for efficiency
+      x = x.transpose(1, 2)
+
+      # Attentive Statistical Pooling
+      x = self.asp(x, lengths=lengths)
+      x = self.asp_bn(x)
+
+      # Final linear transformation
+      x = self.fc(x)
+
+      x = x.transpose(1, 2)
+      return x
+
+
+class LinearWeightedAvg(nn.Module):
+    def __init__(self, config, n_inputs):
+        super().__init__()
+        self.config = config
+        self.weights = nn.ParameterList([nn.Parameter(torch.randn(1)) for i in range(n_inputs)])
+
+    def forward(self, input):
+        res = 0
+        for emb_idx, emb in enumerate(input):
+            res += emb * self.weights[emb_idx]
+        return res
+
+
+def CCCLoss(x, y):
+    
+    ccc = 2*torch.cov(torch.stack((x,y)))[0][1] / (x.var() + y.var() + (x.mean() - y.mean())**2)
+    return ccc
 
 @dataclass
 class SpeechClassifierOutput(ModelOutput):
@@ -70,14 +136,14 @@ class SpeechClassifierOutput(ModelOutput):
 
 
 class ClassificationHead(nn.Module):
-    def __init__(self, config, use_dropout, dropout_rate, use_batch_norm, weight_decay):
+    def __init__(self, config):
         super().__init__()
         self.config = config
-        self.dropout = nn.Dropout(dropout_rate) if use_dropout else nn.Identity()
-        self.batch_norm = nn.BatchNorm1d(config.hidden_size) if use_batch_norm else nn.Identity()
-        self.relu=nn.ReLU()
+        self.dropout = nn.Dropout(config.dropout_rate) if config.use_dropout else nn.Identity()
+        self.batch_norm = nn.BatchNorm1d(config.hidden_size) if config.use_batch_norm else nn.Identity()
+        self.relu=nn.ReLU() if config.use_relu else nn.Identity()
         self.out_proj = nn.Linear(config.hidden_size, config.num_labels)
-        self.weight_decay = weight_decay
+        self.weight_decay = config.weight_decay
 
     def forward(self, features, **kwargs):
         x = features
@@ -95,24 +161,26 @@ class ClassificationHead(nn.Module):
 
 
 class ModelForSpeechClassification(PreTrainedModel):
-    def __init__(self, config, use_dropout=False, dropout_rate=.5, 
-                 use_batch_norm=False, use_l2_reg=False, weight_decay=.01):
+    def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.pooling_mode = config.pooling_mode
         self.config = config
         self.config_class = config.__class__
-        self.use_l2_reg = use_l2_reg
+        self.use_l2_reg = config.use_l2_reg
+        self.weight_encoder_layers = LinearWeightedAvg(config, config.num_hidden_layers+1) if config.use_weight_encoder_layers else None
+        self.pool_position = config.pool_position
         
-        self.model = AutoModel.from_pretrained(config._name_or_path)
-        self.classifier = ClassificationHead(config, use_dropout, dropout_rate, use_batch_norm, weight_decay)
-        self.embedding = ECAPA_TDNN(config.hidden_size, lin_neurons=config.hidden_size) 
+        self.pretrained_model = AutoModel.from_pretrained(config._name_or_path)
+        self.custom_classifier = ClassificationHead(config)
+        self.ecapa_embedding = ECAPA_TDNN(config.hidden_size, lin_neurons=config.hidden_size) if config.pooling_mode =='ecapa' else None 
+        self.att_stats = AttStats(config.hidden_size, lin_neurons=config.hidden_size) if config.pooling_mode =='att_stats' else None
         self.init_weights()
 
 
     def freeze_feature_extractor(self):
         #self.model.freeze_feature_extractor()
-        self.model.feature_extractor._freeze_parameters()
+        self.pretrained_model.feature_extractor._freeze_parameters()
 
     def merged_strategy(
             self,
@@ -126,7 +194,9 @@ class ModelForSpeechClassification(PreTrainedModel):
         elif mode == "max":
             outputs = torch.max(hidden_states, dim=1)[0]
         elif mode == "ecapa":
-            outputs = torch.squeeze(self.embedding(hidden_states))
+            outputs = torch.squeeze(self.ecapa_embedding(hidden_states))
+        elif mode == "att_stats":
+            outputs = torch.squeeze(self.att_stats(hidden_states))
         else:
             raise Exception(
                 "The pooling method hasn't been defined! Your pooling mode must be one of these ['mean', 'sum', 'max']")
@@ -138,23 +208,36 @@ class ModelForSpeechClassification(PreTrainedModel):
             input_values,
             attention_mask=None,
             output_attentions=None,
-            output_hidden_states=None,
+            output_hidden_states=True,
             return_dict=None,
             labels=None,
     ):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-        outputs = self.model(
+        outputs = self.pretrained_model(
             input_values,
             attention_mask=attention_mask,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        hidden_states = outputs[0]
+       
         
-        hidden_states = self.merged_strategy(hidden_states, mode=self.pooling_mode)
-        hidden_states = hidden_states
-        logits = self.classifier(hidden_states)
+        
+        hidden_states = outputs[2]
+
+        if self.weight_encoder_layers and self.pool_position == 'after':
+          hidden_states = self.weight_encoder_layers(hidden_states)
+          hidden_states = self.merged_strategy(hidden_states, mode=self.pooling_mode)
+        elif self.weight_encoder_layers and self.pool_position == 'before':
+          hidden_states = [self.merged_strategy(hidden_state, mode=self.pooling_mode) for hidden_state in hidden_states]
+          hidden_states = self.weight_encoder_layers(hidden_states)
+        else:
+          hidden_states = outputs[0]
+          hidden_states = self.merged_strategy(hidden_states, mode=self.pooling_mode)
+
+
+
+        logits = self.custom_classifier(hidden_states)
 
         loss = None
         if labels is not None:
@@ -170,14 +253,16 @@ class ModelForSpeechClassification(PreTrainedModel):
                 loss_fct = MSELoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels)
             elif self.config.problem_type == "single_label_classification":
-                loss_fct = CrossEntropyLoss()
+                loss_fct = CrossEntropyLoss(torch.tensor(self.config.label_weights).cuda())
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
             elif self.config.problem_type == "multi_label_classification":
-                loss_fct = BCEWithLogitsLoss()
+                #loss_fct = BCEWithLogitsLoss(torch.tensor(self.config.label_weights))
+                #print(labels)
+                #print(logits)
+                loss_fct = lambda x,y: sum([1-CCCLoss(x[:,i],y[:,i]) for i in range(self.num_labels)])/self.num_labels
                 loss = loss_fct(logits, labels)
-
-            if self.use_l2_reg:
-                loss += self.classifier.l2_regularization_loss()
+            if self.config.use_l2_reg:
+                loss += self.custom_classifier.l2_regularization_loss()
 
         if not return_dict:
             output = (logits,) + outputs[2:]
@@ -200,7 +285,7 @@ class DataCollatorCTCWithPadding:
     pad_to_multiple_of: Optional[int] = None
     pad_to_multiple_of_labels: Optional[int] = None
 
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor, List[List[float]]]]]) -> Dict[str, torch.Tensor]:
         input_features = [{"input_values": feature["input_values"]} for feature in features]
         label_features = [feature["labels"] for feature in features]
         
@@ -227,7 +312,6 @@ class CTCTrainer(Trainer):
         model.train()
         inputs = self._prepare_inputs(inputs)
         loss = self.compute_loss(model, inputs)
-
         if self.args.gradient_accumulation_steps > 1:
             loss = loss / self.args.gradient_accumulation_steps
 

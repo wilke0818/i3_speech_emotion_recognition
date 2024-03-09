@@ -80,7 +80,8 @@ def run_model(model_params, model_path, model_save_folder, hp_amount_of_data, hp
     pooling_mode = model_params.pooling_mode
     input_column = model_params.input_column
     output_column = model_params.output_column
-    
+   
+    print(output_column) 
     #Only run the hyperparameter search if we are not skipping it and if we are not resuming training of a model
     if not resume_from_prev and not skip_hp_search:
         #Generate data for hyperparameter search
@@ -100,16 +101,20 @@ def run_model(model_params, model_path, model_save_folder, hp_amount_of_data, hp
     #train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, data_path=model_params.training_data_path)
     train_dataset, eval_dataset, test_dataset = generate_dataset(model_params.seed, model_params.train_test_split, speaker_independent_scenario, True, 1, model_params.training_data_csv)
 
-    print(train_dataset)     
-    label_list = train_dataset.unique(output_column)
-    label_list.sort()  # Let's sort it for determinism
-    num_labels = len(label_list)
-    print(label_list) 
+    print(train_dataset)  
+    if type(output_column) is str:
+      label_list = train_dataset.unique(output_column)
+      label_list.sort()  # Let's sort it for determinism
+      num_labels = len(label_list)
+      print(label_list)
+    else:
+      label_list = output_column
+      num_labels = len(label_list)
     config = AutoConfig.from_pretrained(
         model_name_or_path,
         num_labels=num_labels,
-        label2id={label: i for i, label in enumerate(label_list)},
-        id2label={i: label for i, label in enumerate(label_list)},
+#        label2id={label: i for i, label in enumerate(label_list)},
+#        id2label={i: label for i, label in enumerate(label_list)},
     )
     setattr(config, 'pooling_mode', pooling_mode)
     
@@ -143,8 +148,13 @@ def run_model(model_params, model_path, model_save_folder, hp_amount_of_data, hp
         speech_list = [speech_file_to_array_fn(example)  for example in examples[input_column]]
         gender_list = [gender for gender in examples['gender']]
         #speech_list = [[speech_list[i],gender_list[i]] for i in range(len(gender_list))]
-        target_list = [label_to_id(label, label_list) for label in examples[output_column]]
-    
+        if type(output_column) is str:
+          target_list = [label_to_id(label, label_list) for label in examples[output_column]]
+        else:
+          target_list = []
+          for label in output_column:
+            target_list.append(examples[label])
+          target_list = np.array(target_list).T.tolist()
         result = feature_extractor(speech_list, sampling_rate=target_sampling_rate)
         result["labels"] = list(target_list)
     
@@ -227,10 +237,17 @@ def run_model(model_params, model_path, model_save_folder, hp_amount_of_data, hp
         #print('pred', p.predictions)
         preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
         #preds = np.squeeze(preds) if is_regression else np.argmax(preds, axis=1)
-    
         if is_regression:
-            assert model_params.eval_metric == "mse"
-            return {"mse": ((preds - p.label_ids) ** 2).mean().item()}
+            if model_params.eval_metric == "mse":
+              return {"mse": ((preds - p.label_ids) ** 2).mean().item()}
+            elif model_params.eval_metric == "ccc":
+              ccc_avg = []
+              print(preds.shape)
+              for i in range(num_labels):
+                p_act = torch.from_numpy(p.label_ids) if isinstance(p.label_ids[:,i],np.ndarray) else p.label_ids[:,i]
+                p_pred = p_act = torch.from_numpy(preds[:,i]) if isinstance(preds[:,i], np.ndarray) else preds[:,i]
+                ccc_avg.append(CCCLoss(p_pred, p_act))
+              return {"ccc": np.array(ccc_avg).mean().item()}
         else:
             if model_params.eval_metric == 'accuracy':
               return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
@@ -275,11 +292,13 @@ def run_model(model_params, model_path, model_save_folder, hp_amount_of_data, hp
     if version.parse(torch.__version__) >= version.parse("1.6"):
         _is_native_amp_available = True
         from torch.cuda.amp import autocast
-    
-    label_counts = {k:0 for k in label_list}
-    for row in train_dataset:
-      label_counts[row['class_id']]+=1
-    label_weights = [1/label_counts[label] for label in label_list]
+   
+    if not is_regression: 
+      label_counts = {k:0 for k in label_list}
+      for row in train_dataset:
+        label_counts[row['class_id']]+=1
+      label_weights = [1/label_counts[label] for label in label_list]
+      setattr(config, 'label_weights', label_weights)
     #for label in label_list:
     #  label_weights.append(1/(len(train_dataset.filter(lambda example: example['class_id']==label))))
     setattr(config, 'use_dropout', model_params.use_dropout)
@@ -290,7 +309,7 @@ def run_model(model_params, model_path, model_save_folder, hp_amount_of_data, hp
     setattr(config, 'use_weight_encoder_layers', model_params.use_weight_encoder_layers)
     setattr(config, 'pool_position', model_params.pool_position)
     setattr(config, 'use_relu', model_params.use_relu)
-    setattr(config, 'label_weights', label_weights)
+    setattr(config, 'is_regression', is_regression)
 
     def model_init():
         model = ModelForSpeechClassification.from_pretrained(

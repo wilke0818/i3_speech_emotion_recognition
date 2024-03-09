@@ -40,8 +40,11 @@ def load_saved_dataset(save_path):
         "validation": save_path + "/val.csv",
         "test": save_path + "/test.csv",
     }
-
-    dataset = load_dataset("csv", data_files=data_files, delimiter="\t", )
+    with open(data_files['train']) as f:
+      dialect = csv.Sniffer().sniff(f.read(), delimiters=';,\t')
+      f.seek(0)
+      reader = csv.DictReader(f, dialect=dialect)
+    dataset = load_dataset("csv", data_files=data_files, dialect=dialect )
     train_dataset = dataset["train"]
     eval_dataset = dataset["validation"]
     test_dataset = dataset["test"]
@@ -58,11 +61,14 @@ def generate_dataset(seed=0, training_split=.8, speaker_independent_scenario=Tru
     
     #Code is deterministic so don't redo computation if we don't need to
     if os.path.exists(save_path) and 'train.csv' in os.listdir(save_path):
+      print('Using previously generated train.csv')
       return load_saved_dataset(save_path)
     if not os.path.exists(save_path):
       os.makedirs(save_path)
     with open(data_csv, 'r') as f:
-      reader = csv.DictReader(f)
+      dialect = csv.Sniffer().sniff(f.read(), delimiters=';,\t')
+      f.seek(0)
+      reader = csv.DictReader(f, dialect=dialect)
       for row in reader:
         actor = row['actor']
         class_id = row['class_id']

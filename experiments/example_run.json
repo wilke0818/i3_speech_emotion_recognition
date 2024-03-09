@@ -1,16 +1,21 @@
 {
-    "experiment_name": "testing_exp",
-    "model_files": "./model/inputs/07262023",
-	"output_path": "./model/final/07262023",
-	"hp_amount_of_training_data": 0.3,
-	"hp_num_trials": 5,
-	"datasets": [
-		{
-			"name": "emovo",
-			"eval_csv_path": "./data/emovo/"
-		},
-		{
-			"name": "emozionalmente"
-		}
-	]
+    "experiment_name": "test_file_changes",
+    "model_input_files": "./model/inputs/crema_d_experiments/default/",
+    "model_save_folder": "/om2/user/wilke18/model_outputs",
+    "experiment_artifacts_output_path": "./new_outputs",
+    "cross_validation": 5,
+    "datasets": [
+        {
+            "name": "emovo",
+            "eval_csv_path": "./data/EMOVO_norm/"
+        },
+        {
+            "name": "emotionalmente",
+            "eval_csv_path": "./data/audio4analysis"
+        }
+    ],
+    "training_dataset": {
+	    "name": "crema_d",
+	    "data_csv": "/om2/user/wilke18/CREMA-D/metadata_norm.csv"
+    }
 }

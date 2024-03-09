@@ -91,8 +91,9 @@ def run_eval(model_path, save_path, output_path):
         #    return {'speech': speech[0:int(16000*CUT)]}
         return {'speech': speech}
     
-    
-    test_dataset = load_dataset("csv", data_files={"test": os.path.join(save_path, "test.csv")}, delimiter="\t")["test"]
+    with open(os.path.join(save_path, "test.csv")) as f:
+      dialect = csv.Sniffer().sniff(f.read(), delimiters=';,\t')
+      test_dataset = load_dataset("csv", data_files={"test": os.path.join(save_path, "test.csv")}, dialect=dialect)["test"]
     
     def predict(batch):
         features = processor(batch['speech'], sampling_rate=processor.sampling_rate, return_tensors="pt", padding=True)
@@ -139,7 +140,7 @@ def run_eval(model_path, save_path, output_path):
     genders = set([x['gender'] for x in result])
     print(genders)
     genders_cm = {}
-    accuracies = {'overall': accuracy}
+    gender_accuracies = {}
     
     for gender in genders:
       y_true_gender = []
@@ -152,13 +153,15 @@ def run_eval(model_path, save_path, output_path):
       df_cm_gender = make_cm(emotions, y_true_gender, y_pred_gender, os.path.join(output_path, f'{gender}_confusion_matrix.png'))
       eval_dict_gender = classification_report(y_true_gender, y_pred_gender, target_names=label_names, output_dict=True)
       genders_cm[gender] = df_cm_gender 
-      accuracies[gender] = eval_dict_gender['accuracy']
+      gender_accuracies[gender] = eval_dict_gender['accuracy']
     df_cm = make_cm(emotions, y_true, y_pred, os.path.join(output_path, 'confusion_matrix.png'))
 
     json_path = os.path.join(output_path, 'accuracies.json')
     with open(json_path, 'w') as f:
-      f.write(json.dumps(accuracies))
-    return df_cm, accuracy, genders_cm, accuracies
+      json_accuracies = gender_accuracies
+      json_accuracies['overall'] = accuracy
+      f.write(json.dumps(json_accuracies))
+    return df_cm, accuracy, genders_cm, gender_accuracies
 
 def make_cm(label_names, y_true, y_pred, output_name):
     cm=confusion_matrix(y_true, y_pred)
@@ -186,18 +189,15 @@ def make_cm(label_names, y_true, y_pred, output_name):
 #run_eval('./jonatasgrosman_wav2vec2_large_xlsr_53_italian/0/', './data/EMOVO/', './outputs/jonatasgrosman_wav2vec2_large_xlsr_53_italian/emovo/0/')
 #run_eval('/om2/user/wilke18/model_outputs/jonatasgrosman_wav2vec2_large_xlsr_53_italian_eval_loss_test1/0', './data/EMOVO_norm/', './emovo/')
 
-def main():
+
+
+def run_full_evals(evals):
   confusion_matrices = {}
   accuracies = {}
-  parser=argparse.ArgumentParser()
-
-  parser.add_argument("--eval_path", help="Runs the evaluation code using CSV path given. If directory, uses all CSVs in the path")
-  
-
-  args=parser.parse_args()
-  evals = get_csv_info(args.eval_path)
 
   for model in evals.keys():
+    confusion_matrices = {}
+    accuracies = {}
     eval_base_path = ''
     for dataset in evals[model].keys():
       for (model_path, eval_csv_path, eval_out_path) in evals[model][dataset]:
@@ -258,8 +258,10 @@ def get_csv_info(csv_path):
   evals = {}
 
   for csv_f in csvs:
-    with open(csv_f, 'r') as csvfile:
-      reader = csv.DictReader(csvfile, delimiter='\t')
+    with open(csv_f, 'r') as f:
+      dialect = csv.Sniffer().sniff(f.read(), delimiters=';,\t')
+      f.seek(0)
+      reader = csv.DictReader(f, dialect=dialect)
       for row in reader:
         if row['model_name'] not in evals:
           evals[row['model_name']] = {}
@@ -267,6 +269,16 @@ def get_csv_info(csv_path):
           evals[row['model_name']][row['dataset_name']] = []
         evals[row['model_name']][row['dataset_name']].append((row['model_path'], row['eval_csv_path'], row['eval_out_path']))
   return evals
+
+
+
+def main():
+  parser=argparse.ArgumentParser()
+
+  parser.add_argument("--eval_path", help="Runs the evaluation code using CSV path given. If directory, uses all CSVs in the path")
+  args=parser.parse_args()
+  evals = get_csv_info(args.eval_path)
+  run_full_evals(evals)
 
 if __name__ == "__main__":
     sys.exit(main())

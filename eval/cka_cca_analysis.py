@@ -166,9 +166,9 @@ def cca(features_x, features_y):
 
 import sys
 import os
-import torch
-import torchaudio
-from transformers import AutoModel
+#import torch
+#import torchaudio
+#from transformers import AutoModel
 from tqdm import tqdm
 import numpy as np
 
@@ -209,4 +209,4 @@ def calculate_cka_cca(wav_files_path, model1_path, model2_path):
   print('Linear CKA from Features: {:.5f}'.format(cka_from_features))
   print('Mean Squared CCA Correlation: {:.5f}'.format(cca(model1_embeddings, model2_embeddings)))
 
-calculate_cka_cca('./data/audio4analysis', './model/final/06232023/wav2vec2-xlsr/411/', './model/final/06232023/wav2vec2-xlsr/411/')
+#calculate_cka_cca('./data/audio4analysis', './model/final/06232023/wav2vec2-xlsr/411/', './model/final/06232023/wav2vec2-xlsr/411/')

@@ -1,6 +1,23 @@
 #Custom git ignore files
 *.sh
 .DS_Store
+embeddings/visualizations/*
+experiments/*
+model/inputs/*
+log_grapher/*
+logs/*
+logs_eval/*
+logs_final/*
+wavlm_logs/*
+msp_cont/*
+msp_no_o_x/*
+msp_paper2/*
+msp_splits/*
+
+new_outputs/*
+paper2_outputs/*
+data/*
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
