@@ -5,8 +5,11 @@ This GitHub repository contains code and resources for the paper titled "Explori
 
 [A demo exploring Speech Emotion Recognition that attempts to classify your own voice (no data is saved or used from this)](https://huggingface.co/spaces/wilke18/ItalianSER) - TODO: weird errors started popping up :'(
 
+##Interspeech 2024 Papers (under review)
+[What Happens To WavLM Embeddings During Speech Emotion Recognition Fine-tuning?](https://github.com/wilke0818/i3_speech_emotion_recognition/blob/main/interspeech_model_embeddings.pdf)
+[Exploring the Impact of Model Architectures, Language-based Pre-finetuning, and Test Datasets on Speech Emotion Recognition](https://github.com/wilke0818/i3_speech_emotion_recognition/blob/main/interspeech_model_architectures.pdf) - We have edited the original paper based on feedback from the ICASSP reviewers and have resubmitted it for consideration.
 
-## Paper's abstract
+## Oringal ICASSP Paper's abstract
 Speech Emotion Recognition (SER) is being increasingly applied in many societal contexts, often without adequate benchmarking. This study investigates the effects of model architectures, language-based pre-fine-tuning, and test datasets on the accuracy of SER systems, providing valuable insights for future SER studies and applications. 
 We ran a statistical evaluation on two Italian emotional speech datasets, i.e., Emozionalmente and EMOVO, employing two distinct self-supervised model architectures (Wav2vec 2.0 and HuBERT), both with and without Italian pre-fine-tuning. 
 We found that model architectures and test datasets individually wield significant influence over the accuracy scores. Emozionalmente outperforms EMOVO with a highly significant difference, making a strong case for using Emozionalmente as an Italian SER dataset, and Wav2vec 2.0 shows a similar level of significance in favor of HuBERT. 
