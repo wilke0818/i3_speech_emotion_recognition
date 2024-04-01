@@ -5,8 +5,10 @@ This GitHub repository contains code and resources for the paper titled "Explori
 
 [A demo exploring Speech Emotion Recognition that attempts to classify your own voice (no data is saved or used from this)](https://huggingface.co/spaces/wilke18/ItalianSER) - TODO: weird errors started popping up :'(
 
-##Interspeech 2024 Papers (under review)
+## Interspeech 2024 Papers (under review)
+
 [What Happens To WavLM Embeddings During Speech Emotion Recognition Fine-tuning?](https://github.com/wilke0818/i3_speech_emotion_recognition/blob/main/interspeech_model_embeddings.pdf)
+
 [Exploring the Impact of Model Architectures, Language-based Pre-finetuning, and Test Datasets on Speech Emotion Recognition](https://github.com/wilke0818/i3_speech_emotion_recognition/blob/main/interspeech_model_architectures.pdf) - We have edited the original paper based on feedback from the ICASSP reviewers and have resubmitted it for consideration.
 
 ## Oringal ICASSP Paper's abstract
